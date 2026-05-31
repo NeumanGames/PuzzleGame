@@ -1375,10 +1375,14 @@ function buildJigsaw() {
   game.boardW = boardW;  game.boardH = boardH;
   game.pieceW = boardW / N;  game.pieceH = boardH / N;
 
-  // World size & board position
-  const worldW = vpW * 2.6, worldH = vpH * 2.6;
-  game.boardX = (worldW - boardW) / 2;
-  game.boardY = (worldH - boardH) / 2;
+  // World is board + one ring of piece-slots around it.
+  // Ring width = 2 * pieceW on each side so pieces have room but don't waste space.
+  const ringW  = game.pieceW * 2.2;
+  const ringH  = game.pieceH * 2.2;
+  const worldW = boardW + ringW * 2;
+  const worldH = boardH + ringH * 2;
+  game.boardX  = ringW;
+  game.boardY  = ringH;
 
   // Create canvas
   const canvas = document.createElement('canvas');
@@ -1419,6 +1423,7 @@ function buildJigsaw() {
         snapPx, snapPy,
         tabDirs: tabs[r][c],
         snapped: false,
+        locked:  false,
         groupId: null,
         rotation: cfg.adv.rotation ? [0,90,180,270][Math.floor(Math.random()*4)] : 0,
         zOrder: zOrder++,
@@ -1601,14 +1606,24 @@ function drawJigsaw() {
     ctx.stroke();
     ctx.restore();
 
+    // ─ Lock overlay for snapped pieces ─────────────────────
+    if (p.locked) {
+      ctx.save();
+      buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(107,203,119,0.12)';
+      ctx.fillRect(sx - sw, sy - sh, sw * 3, sh * 3);
+      ctx.restore();
+    }
+
     // ─ Outline ──────────────────────────────────────────────
     buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
     if (p === game.draggingPiece) {
       ctx.strokeStyle = 'rgba(77,150,255,0.9)';
       ctx.lineWidth   = 2.5;
-    } else if (p.snapped) {
-      ctx.strokeStyle = 'rgba(30,30,30,0.25)';
-      ctx.lineWidth   = 1;
+    } else if (p.locked) {
+      ctx.strokeStyle = 'rgba(107,203,119,0.55)';
+      ctx.lineWidth   = 1.2;
     } else {
       ctx.strokeStyle = 'rgba(30,30,30,0.5)';
       ctx.lineWidth   = 1.5;
@@ -1618,60 +1633,56 @@ function drawJigsaw() {
 }
 
 // ── SCATTER ───────────────────────────────────────────────────
-// Places pieces in the tray zones using a grid-slot approach so
-// pieces don't overlap each other on initial setup.
+// Fills the ring around the board with shuffled pieces.
+// Pieces are placed on a grid in the ring area so they don't overlap.
 function scatterPieces() {
   const bx = game.boardX, by = game.boardY;
   const bw = game.boardW, bh = game.boardH;
   const pw = game.pieceW, ph = game.pieceH;
   const wW = game.worldW, wH = game.worldH;
-  // Include tab overhang in effective piece footprint
-  const tabExt = Math.min(pw, ph) * 0.45;
-  const cellW  = pw + tabExt * 2 + 6;   // slot size with a little spacing
-  const cellH  = ph + tabExt * 2 + 6;
-  const tray   = cfg.tray;
-  const N      = cfg.cols;
 
-  // Build slot grids for each side
-  // Each slot is { x, y } = top-left world coord (already accounting for tabExt)
-  function makeSlots(side) {
+  // Cell size: piece + small gap
+  const gap  = Math.max(4, Math.min(pw, ph) * 0.12);
+  const cellW = pw + gap;
+  const cellH = ph + gap;
+  const tray  = cfg.tray;
+
+  // Build all available slots in the ring around the board.
+  // The ring is the world minus the board rectangle.
+  // We create slots for all four sides, then assign based on tray setting.
+  function buildSideSlots(side) {
     const slots = [];
-    const pad = Math.min(pw, ph) * 0.15;   // gap between board and tray
-
     if (side === 'top') {
-      const areaX = bx; const areaW = bw;
-      const areaY = 4;  const areaH = Math.max(cellH, by - pad - 4);
-      const cols = Math.max(1, Math.floor(areaW / cellW));
-      const rows = Math.max(1, Math.floor(areaH / cellH));
-      for (let r = rows - 1; r >= 0; r--)
-        for (let c = 0; c < cols; c++)
-          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
-    } else if (side === 'bottom') {
-      const areaX = bx; const areaW = bw;
-      const areaY = by + bh + pad; const areaH = Math.max(cellH, wH - areaY - 4);
-      const cols = Math.max(1, Math.floor(areaW / cellW));
-      const rows = Math.max(1, Math.floor(areaH / cellH));
+      // Area above board: full world width, from y=0 to by
+      const cols = Math.max(1, Math.floor(wW / cellW));
+      const rows = Math.max(1, Math.floor(by / cellH));
       for (let r = 0; r < rows; r++)
         for (let c = 0; c < cols; c++)
-          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
+          slots.push({ x: c * cellW, y: r * cellH });
+    } else if (side === 'bottom') {
+      // Area below board
+      const startY = by + bh + gap;
+      const cols = Math.max(1, Math.floor(wW / cellW));
+      const rows = Math.max(1, Math.floor((wH - startY) / cellH));
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          slots.push({ x: c * cellW, y: startY + r * cellH });
     } else if (side === 'left') {
-      const areaX = 4; const areaW = Math.max(cellW, bx - pad - 4);
-      const areaY = by; const areaH = bh;
-      const cols = Math.max(1, Math.floor(areaW / cellW));
-      const rows = Math.max(1, Math.floor(areaH / cellH));
-      for (let c = cols - 1; c >= 0; c--)
-        for (let r = 0; r < rows; r++)
-          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
+      // Area left of board (only the band beside the board vertically)
+      const cols = Math.max(1, Math.floor(bx / cellW));
+      const rows = Math.max(1, Math.floor(bh / cellH));
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          slots.push({ x: c * cellW, y: by + r * cellH });
     } else { // right
-      const areaX = bx + bw + pad; const areaW = Math.max(cellW, wW - areaX - 4);
-      const areaY = by; const areaH = bh;
-      const cols = Math.max(1, Math.floor(areaW / cellW));
-      const rows = Math.max(1, Math.floor(areaH / cellH));
-      for (let c = 0; c < cols; c++)
-        for (let r = 0; r < rows; r++)
-          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
+      const startX = bx + bw + gap;
+      const cols = Math.max(1, Math.floor((wW - startX) / cellW));
+      const rows = Math.max(1, Math.floor(bh / cellH));
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          slots.push({ x: startX + c * cellW, y: by + r * cellH });
     }
-    // Shuffle slots for variety
+    // shuffle
     for (let i = slots.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [slots[i], slots[j]] = [slots[j], slots[i]];
@@ -1679,168 +1690,176 @@ function scatterPieces() {
     return slots;
   }
 
-  const sides = tray === 'all' ? ['top', 'bottom', 'left', 'right'] : [tray];
-  const slotMap = {};
-  sides.forEach(s => slotMap[s] = makeSlots(s));
+  const sides = tray === 'all'
+    ? ['top', 'bottom', 'left', 'right']
+    : [tray];
+
+  // Build pools for each side
+  const pools = {};
+  sides.forEach(s => pools[s] = buildSideSlots(s));
+
+  // Merge into one flat pool if 'all', cycling through sides
+  let allSlots = [];
+  if (tray === 'all') {
+    const maxLen = Math.max(...sides.map(s => pools[s].length));
+    for (let i = 0; i < maxLen; i++)
+      sides.forEach(s => { if (pools[s][i]) allSlots.push(pools[s][i]); });
+  } else {
+    allSlots = pools[tray];
+  }
 
   const shuffled = [...game.pieces].sort(() => Math.random() - 0.5);
-  let sideIdx = 0;
-
   shuffled.forEach((p, i) => {
-    const side = tray === 'all' ? sides[i % 4] : tray;
-    const slots = slotMap[side];
-
-    let tx, ty;
-    if (slots.length > 0) {
-      const slot = slots.shift();   // take the next pre-computed slot
-      // Centre the piece in the slot (accounting for tab extent)
-      tx = slot.x + tabExt;
-      ty = slot.y + tabExt;
+    if (i < allSlots.length) {
+      p.px = allSlots[i].x;
+      p.py = allSlots[i].y;
     } else {
-      // Fallback: random position in the tray area
-      tx = bx + Math.random() * bw;
-      ty = by + Math.random() * bh;
+      // Overflow: place randomly in top strip
+      p.px = Math.random() * Math.max(pw, wW - pw);
+      p.py = Math.random() * Math.max(ph, by * 0.5);
     }
-
-    p.px = Math.max(0, Math.min(wW - pw, tx));
-    p.py = Math.max(0, Math.min(wH - ph, ty));
+    // Clamp
+    p.px = Math.max(0, Math.min(wW - pw, p.px));
+    p.py = Math.max(0, Math.min(wH - ph, p.py));
   });
 }
 
 // ── SNAP ─────────────────────────────────────────────────────
+// KEY DESIGN:
+//   - All snap targets are EXACT board coordinates (snapPx/snapPy).
+//   - A piece may only snap to a neighbour if that neighbour is itself
+//     exactly on the board (snapped=true) or is in a group whose anchor
+//     is on the board. This prevents drift cascades.
+//   - Once snapped, piece.locked = true; it cannot be moved again.
+//   - Snap distance is in world coords (zoom-independent).
+
 function trySnap(piece) {
-  if (piece.snapped) return;
+  if (piece.snapped || piece.locked) return;
   if (piece.rotation !== 0) return;
 
   const pw = game.pieceW, ph = game.pieceH;
-  // Snap threshold is in WORLD coords. pieceW is world size.
-  // Use a generous threshold so snap feels natural at any zoom.
   const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
   const N = cfg.cols;
 
-  // ── 1. Try snapping directly to board ──────────────────────
-  const distToBoard = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
-  if (distToBoard < snapDist) {
-    doSnap(piece, piece.snapPx, piece.snapPy, null);
-    return;
+  // Helper: can piece snap to exact board position?
+  function trySnaToBoard() {
+    const dist = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
+    if (dist < snapDist) {
+      snapToBoard(piece);
+      return true;
+    }
+    return false;
   }
 
-  // ── 2. Try snapping to a neighbour ─────────────────────────
-  // Prefer already-snapped neighbours (on board) first, then unsnapped groups.
-  const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
+  if (trySnaToBoard()) return;
 
-  // First pass: snapped neighbours
+  // Try neighbours that are already locked on the board
+  const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
   for (const {dr, dc} of dirs) {
     const nr = piece.r + dr, nc = piece.c + dc;
     if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
-    const nb = game.pieces.find(p => p.r === nr && p.c === nc && p.snapped);
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc && p.locked);
     if (!nb) continue;
-    const idealPx = nb.px + (piece.snapPx - nb.snapPx);
-    const idealPy = nb.py + (piece.snapPy - nb.snapPy);
-    if (Math.hypot(piece.px - idealPx, piece.py - idealPy) < snapDist) {
-      doSnap(piece, idealPx, idealPy, nb);
+    // The correct position for piece relative to this locked neighbour
+    // is simply its own snapPx/snapPy (since nb is already at its snapPx/snapPy).
+    const dist = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
+    if (dist < snapDist) {
+      snapToBoard(piece);
       return;
     }
   }
 
-  // Second pass: unsnapped neighbours (free-floating group formation)
+  // Free-floating group: snap to an unsnapped neighbour that is close
   for (const {dr, dc} of dirs) {
     const nr = piece.r + dr, nc = piece.c + dc;
     if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
-    const nb = game.pieces.find(p => p.r === nr && p.c === nc && !p.snapped);
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc && !p.locked);
     if (!nb) continue;
-    // Don't snap to a piece already in the same group
     if (nb.groupId !== null && nb.groupId === piece.groupId) continue;
+    // Where piece MUST be to sit exactly beside nb
     const idealPx = nb.px + (piece.snapPx - nb.snapPx);
     const idealPy = nb.py + (piece.snapPy - nb.snapPy);
     if (Math.hypot(piece.px - idealPx, piece.py - idealPy) < snapDist) {
-      doSnap(piece, idealPx, idealPy, nb);
+      snapToNeighbour(piece, nb, idealPx, idealPy);
       return;
     }
   }
 }
 
-function doSnap(piece, tx, ty, neighbor) {
-  // tx, ty are where piece.px/py should land.
-  // For board snaps: tx===piece.snapPx, ty===piece.snapPy (exact).
-  // For neighbour snaps: tx = neighbor.px + (piece.snapPx - neighbor.snapPx).
-  // If neighbor itself has drift (not yet on board), the group floats freely
-  // but all relative positions are exact multiples of pieceW/pieceH.
+// Snap piece exactly to its board position and lock it.
+function snapToBoard(piece) {
+  animateSnap(piece, piece.snapPx, piece.snapPy, () => {
+    piece.px      = piece.snapPx;
+    piece.py      = piece.snapPy;
+    piece.snapped = true;
+    piece.locked  = true;
+    game.solved++;
 
-  const atBoard = (Math.abs(tx - piece.snapPx) < 0.5 && Math.abs(ty - piece.snapPy) < 0.5);
+    // If piece was in a group, snap all group members to board too
+    if (piece.groupId !== null) {
+      game.pieces
+        .filter(gp => gp.groupId === piece.groupId && !gp.locked)
+        .forEach(gp => {
+          gp.px      = gp.snapPx;
+          gp.py      = gp.snapPy;
+          gp.snapped = true;
+          gp.locked  = true;
+          game.solved++;
+        });
+    }
 
-  // Smooth animation
+    updateGameStats();
+    drawJigsaw();
+    if (game.solved >= cfg.cols * cfg.cols) setTimeout(handleWin, 400);
+  });
+}
+
+// Snap piece to sit exactly beside a free-floating neighbour.
+function snapToNeighbour(piece, nb, tx, ty) {
+  animateSnap(piece, tx, ty, () => {
+    piece.px = tx;
+    piece.py = ty;
+
+    // Assign group
+    if (nb.groupId !== null) {
+      const oldGid = piece.groupId;
+      game.pieces.forEach(gp => {
+        if (gp === piece || gp.groupId === oldGid) gp.groupId = nb.groupId;
+      });
+    } else {
+      const gid = Date.now() + Math.random();
+      nb.groupId    = gid;
+      piece.groupId = gid;
+    }
+
+    // Realign all group members to exact relative positions using piece as anchor
+    const anchorDX = piece.px - piece.snapPx;
+    const anchorDY = piece.py - piece.snapPy;
+    game.pieces
+      .filter(gp => gp.groupId === piece.groupId && gp !== piece)
+      .forEach(gp => {
+        gp.px = gp.snapPx + anchorDX;
+        gp.py = gp.snapPy + anchorDY;
+      });
+
+    drawJigsaw();
+  });
+}
+
+function animateSnap(piece, tx, ty, onDone) {
   const startX = piece.px, startY = piece.py;
   const startT = performance.now();
-  const dur = 150;
-
-  function animate(t) {
+  const dur = 130;
+  function step(t) {
     const prog = Math.min(1, (t - startT) / dur);
     const ease = 1 - Math.pow(1 - prog, 3);
     piece.px = startX + (tx - startX) * ease;
     piece.py = startY + (ty - startY) * ease;
     drawJigsaw();
-    if (prog < 1) {
-      requestAnimationFrame(animate);
-      return;
-    }
-
-    // Animation done — set exact position
-    piece.px = tx;
-    piece.py = ty;
-
-    // ── Group membership ──────────────────────────────────────
-    if (neighbor) {
-      if (neighbor.groupId !== null) {
-        // Join existing group — absorb any pieces already in piece's group too
-        const newGid = neighbor.groupId;
-        const oldGid = piece.groupId;
-        game.pieces.forEach(gp => {
-          if (gp === piece || gp.groupId === oldGid) gp.groupId = newGid;
-        });
-        piece.groupId = newGid;
-      } else {
-        const gid = Date.now() + Math.random();
-        neighbor.groupId = gid;
-        piece.groupId    = gid;
-      }
-    }
-
-    // ── Realign the whole group to exact relative positions ───
-    // Use piece as the anchor. Every group member's correct position
-    // is piece.px + (member.snapPx - piece.snapPx). This eliminates
-    // any drift that accumulated from previous float-point moves.
-    if (piece.groupId !== null) {
-      const anchorDX = piece.px - piece.snapPx;
-      const anchorDY = piece.py - piece.snapPy;
-      game.pieces
-        .filter(gp => gp.groupId === piece.groupId && gp !== piece)
-        .forEach(gp => {
-          gp.px = gp.snapPx + anchorDX;
-          gp.py = gp.snapPy + anchorDY;
-        });
-    }
-
-    // ── Mark solved if on board ───────────────────────────────
-    if (atBoard) {
-      // All pieces in this group (or just this piece) snap exactly to board
-      const toSolve = piece.groupId !== null
-        ? game.pieces.filter(p => p.groupId === piece.groupId && !p.snapped)
-        : [piece];
-      toSolve.forEach(gp => {
-        gp.px      = gp.snapPx;
-        gp.py      = gp.snapPy;
-        gp.snapped = true;
-        game.solved++;
-      });
-    }
-
-    updateGameStats();
-    drawJigsaw();
-    if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
+    if (prog < 1) requestAnimationFrame(step);
+    else onDone();
   }
-
-  requestAnimationFrame(animate);
+  requestAnimationFrame(step);
 }
 
 // ── CANVAS INTERACTION ────────────────────────────────────────
@@ -1863,10 +1882,10 @@ function setupCanvasInteraction() {
 
   function pieceAt(wx, wy) {
     const pw = game.pieceW, ph = game.pieceH;
-    // Check in reverse zOrder (top first)
+    // Check in reverse zOrder (top first); skip locked pieces
     const sorted = [...game.pieces].sort((a,b) => b.zOrder - a.zOrder);
     for (const p of sorted) {
-      // Hit test on the piece's bounding box (good enough; tabs are small)
+      if (p.locked) continue;   // locked pieces cannot be dragged
       if (wx >= p.px - pw*0.35 && wx <= p.px + pw*1.35 &&
           wy >= p.py - ph*0.35 && wy <= p.py + ph*1.35) {
         return p;
@@ -1946,12 +1965,11 @@ function setupCanvasInteraction() {
       game.draggingPiece = null;
       game.moves++;
       updateGameStats();
-      // Try snapping the dropped piece
+      // Try snapping the dropped piece, then any group members
       trySnap(piece);
-      // Also try snapping every member of its group (chain-snap)
       if (piece.groupId !== null) {
         game.pieces
-          .filter(p => p.groupId === piece.groupId && p !== piece && !p.snapped)
+          .filter(p => p.groupId === piece.groupId && p !== piece && !p.locked)
           .forEach(p => trySnap(p));
       }
       drawJigsaw();
