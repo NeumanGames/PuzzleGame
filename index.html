@@ -1573,14 +1573,18 @@ function drawJigsaw() {
     ctx.clip();
 
     if (game.img) {
-      // Draw the FULL board image positioned so the correct slice
-      // lands at (sx, sy). This ensures tab areas are filled too.
-      const imgScale  = bsw / game.img.width;   // screen px per image px
-      const imgDrawW  = game.img.width  * imgScale;
-      const imgDrawH  = game.img.height * imgScale;
-      const imgDrawX  = bsx;
-      const imgDrawY  = bsy;
-      ctx.drawImage(game.img, imgDrawX, imgDrawY, imgDrawW, imgDrawH);
+      // The piece's slice of the board image is (p.c * pw, p.r * ph) within
+      // the full board, sized (pw x ph). We need to draw the full board image
+      // offset so that tile (p.r, p.c) aligns with the piece's current screen pos.
+      // 
+      // If piece were at its snap position, the board image drawn at (bsx, bsy)
+      // would be correct. But the piece is at (sx, sy) instead of its snap screen pos.
+      // So we shift the board image by (sx - snapSX, sy - snapSY).
+      const snapSX = p.snapPx * zoom + panX;
+      const snapSY = p.snapPy * zoom + panY;
+      const imgX   = bsx + (sx - snapSX);
+      const imgY   = bsy + (sy - snapSY);
+      ctx.drawImage(game.img, imgX, imgY, bsw, bsh);
     }
 
     ctx.restore();
