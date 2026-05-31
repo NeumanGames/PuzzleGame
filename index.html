@@ -725,7 +725,7 @@ footer {
 // ══════════════════════════════════════════════════════════════
 const UNSPLASH_KEY = '6bofrVa81GYXijWX8L6BX9CYP3EeU_ddCrB-SDjlTks'; // Unsplash Access Key
 
-const SNAP_THRESHOLD = 0.38; // fraction of piece size
+const SNAP_THRESHOLD = 0.50; // fraction of piece size — generous for easy snapping
 const TAB_SIZE       = 0.32; // fraction of piece size (jigsaw tab height)
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.0;
@@ -1710,31 +1710,50 @@ function scatterPieces() {
 // ── SNAP ─────────────────────────────────────────────────────
 function trySnap(piece) {
   if (piece.snapped) return;
-  const pw = game.pieceW, ph = game.pieceH;
-  const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
-  const N = cfg.cols;
   if (piece.rotation !== 0) return;
 
-  // 1. Try snapping to board final position
+  const pw = game.pieceW, ph = game.pieceH;
+  // Snap threshold is in WORLD coords. pieceW is world size.
+  // Use a generous threshold so snap feels natural at any zoom.
+  const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
+  const N = cfg.cols;
+
+  // ── 1. Try snapping directly to board ──────────────────────
   const distToBoard = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
   if (distToBoard < snapDist) {
     doSnap(piece, piece.snapPx, piece.snapPy, null);
     return;
   }
 
-  // 2. Try snapping to any neighbour (snapped OR unsnapped)
+  // ── 2. Try snapping to a neighbour ─────────────────────────
+  // Prefer already-snapped neighbours (on board) first, then unsnapped groups.
   const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
+
+  // First pass: snapped neighbours
   for (const {dr, dc} of dirs) {
     const nr = piece.r + dr, nc = piece.c + dc;
     if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
-    const nb = game.pieces.find(p => p.r === nr && p.c === nc);
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc && p.snapped);
     if (!nb) continue;
-
-    // Where 'piece' should be if aligned with nb
     const idealPx = nb.px + (piece.snapPx - nb.snapPx);
     const idealPy = nb.py + (piece.snapPy - nb.snapPy);
-    const dist = Math.hypot(piece.px - idealPx, piece.py - idealPy);
-    if (dist < snapDist) {
+    if (Math.hypot(piece.px - idealPx, piece.py - idealPy) < snapDist) {
+      doSnap(piece, idealPx, idealPy, nb);
+      return;
+    }
+  }
+
+  // Second pass: unsnapped neighbours (free-floating group formation)
+  for (const {dr, dc} of dirs) {
+    const nr = piece.r + dr, nc = piece.c + dc;
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc && !p.snapped);
+    if (!nb) continue;
+    // Don't snap to a piece already in the same group
+    if (nb.groupId !== null && nb.groupId === piece.groupId) continue;
+    const idealPx = nb.px + (piece.snapPx - nb.snapPx);
+    const idealPy = nb.py + (piece.snapPy - nb.snapPy);
+    if (Math.hypot(piece.px - idealPx, piece.py - idealPy) < snapDist) {
       doSnap(piece, idealPx, idealPy, nb);
       return;
     }
@@ -1742,12 +1761,19 @@ function trySnap(piece) {
 }
 
 function doSnap(piece, tx, ty, neighbor) {
-  const atBoard = (Math.abs(tx - piece.snapPx) < 1 && Math.abs(ty - piece.snapPy) < 1);
+  // tx, ty are where piece.px/py should land.
+  // For board snaps: tx===piece.snapPx, ty===piece.snapPy (exact).
+  // For neighbour snaps: tx = neighbor.px + (piece.snapPx - neighbor.snapPx).
+  // If neighbor itself has drift (not yet on board), the group floats freely
+  // but all relative positions are exact multiples of pieceW/pieceH.
+
+  const atBoard = (Math.abs(tx - piece.snapPx) < 0.5 && Math.abs(ty - piece.snapPy) < 0.5);
 
   // Smooth animation
   const startX = piece.px, startY = piece.py;
   const startT = performance.now();
-  const dur = 180;
+  const dur = 150;
+
   function animate(t) {
     const prog = Math.min(1, (t - startT) / dur);
     const ease = 1 - Math.pow(1 - prog, 3);
@@ -1756,45 +1782,64 @@ function doSnap(piece, tx, ty, neighbor) {
     drawJigsaw();
     if (prog < 1) {
       requestAnimationFrame(animate);
-    } else {
-      piece.px = tx; piece.py = ty;
+      return;
+    }
 
-      // Resolve group membership
-      if (neighbor && neighbor.groupId !== null) {
-        piece.groupId = neighbor.groupId;
-      } else if (neighbor && neighbor.groupId === null) {
+    // Animation done — set exact position
+    piece.px = tx;
+    piece.py = ty;
+
+    // ── Group membership ──────────────────────────────────────
+    if (neighbor) {
+      if (neighbor.groupId !== null) {
+        // Join existing group — absorb any pieces already in piece's group too
+        const newGid = neighbor.groupId;
+        const oldGid = piece.groupId;
+        game.pieces.forEach(gp => {
+          if (gp === piece || gp.groupId === oldGid) gp.groupId = newGid;
+        });
+        piece.groupId = newGid;
+      } else {
         const gid = Date.now() + Math.random();
         neighbor.groupId = gid;
         piece.groupId    = gid;
       }
-
-      // If this snapped to the board, mark all group pieces as solved
-      if (atBoard) {
-        const toSolve = piece.groupId !== null
-          ? game.pieces.filter(p => p.groupId === piece.groupId && !p.snapped)
-          : [piece];
-        toSolve.forEach(gp => {
-          gp.px = gp.snapPx; gp.py = gp.snapPy;
-          gp.snapped = true;
-          game.solved++;
-        });
-      }
-
-      // Align group members relative to this piece
-      if (piece.groupId !== null) {
-        const offsetX = piece.px - piece.snapPx;
-        const offsetY = piece.py - piece.snapPy;
-        game.pieces.filter(p => p.groupId === piece.groupId && p !== piece).forEach(gp => {
-          gp.px = gp.snapPx + offsetX;
-          gp.py = gp.snapPy + offsetY;
-        });
-      }
-
-      updateGameStats();
-      drawJigsaw();
-      if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
     }
+
+    // ── Realign the whole group to exact relative positions ───
+    // Use piece as the anchor. Every group member's correct position
+    // is piece.px + (member.snapPx - piece.snapPx). This eliminates
+    // any drift that accumulated from previous float-point moves.
+    if (piece.groupId !== null) {
+      const anchorDX = piece.px - piece.snapPx;
+      const anchorDY = piece.py - piece.snapPy;
+      game.pieces
+        .filter(gp => gp.groupId === piece.groupId && gp !== piece)
+        .forEach(gp => {
+          gp.px = gp.snapPx + anchorDX;
+          gp.py = gp.snapPy + anchorDY;
+        });
+    }
+
+    // ── Mark solved if on board ───────────────────────────────
+    if (atBoard) {
+      // All pieces in this group (or just this piece) snap exactly to board
+      const toSolve = piece.groupId !== null
+        ? game.pieces.filter(p => p.groupId === piece.groupId && !p.snapped)
+        : [piece];
+      toSolve.forEach(gp => {
+        gp.px      = gp.snapPx;
+        gp.py      = gp.snapPy;
+        gp.snapped = true;
+        game.solved++;
+      });
+    }
+
+    updateGameStats();
+    drawJigsaw();
+    if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
   }
+
   requestAnimationFrame(animate);
 }
 
@@ -1864,15 +1909,25 @@ function setupCanvasInteraction() {
     e.preventDefault();
     if (game.draggingPiece) {
       const { wx, wy } = worldPos(e.clientX, e.clientY);
+      // New absolute position for the anchor piece
       const nx = wx - game.dragOffX;
       const ny = wy - game.dragOffY;
-      const dx = nx - game.draggingPiece.px;
-      const dy = ny - game.draggingPiece.py;
 
       if (game.draggingPiece.groupId !== null) {
-        game.pieces.filter(p => p.groupId === game.draggingPiece.groupId).forEach(p => {
-          p.px += dx; p.py += dy;
-        });
+        // Move all group pieces by the same delta, computed from anchor
+        const dx = nx - game.draggingPiece.px;
+        const dy = ny - game.draggingPiece.py;
+        // Set anchor first, then offset all others relative to anchor's snapPx
+        game.draggingPiece.px = nx;
+        game.draggingPiece.py = ny;
+        const anchorDX = nx - game.draggingPiece.snapPx;
+        const anchorDY = ny - game.draggingPiece.snapPy;
+        game.pieces
+          .filter(p => p.groupId === game.draggingPiece.groupId && p !== game.draggingPiece)
+          .forEach(p => {
+            p.px = p.snapPx + anchorDX;
+            p.py = p.snapPy + anchorDY;
+          });
       } else {
         game.draggingPiece.px = nx;
         game.draggingPiece.py = ny;
@@ -1891,7 +1946,14 @@ function setupCanvasInteraction() {
       game.draggingPiece = null;
       game.moves++;
       updateGameStats();
+      // Try snapping the dropped piece
       trySnap(piece);
+      // Also try snapping every member of its group (chain-snap)
+      if (piece.groupId !== null) {
+        game.pieces
+          .filter(p => p.groupId === piece.groupId && p !== piece && !p.snapped)
+          .forEach(p => trySnap(p));
+      }
       drawJigsaw();
     }
     isPanning = false;
@@ -1981,11 +2043,11 @@ function generateTabs(N) {
   function randEdge(dir) {
     return {
       dir,
-      offset: rnd(-0.10, 0.10),   // knob centre shifts left/right along edge
-      neck:   rnd(0.08,  0.13),   // narrow neck
-      head:   rnd(0.17,  0.24),   // wider rounded head
-      height: rnd(0.28,  0.40),   // protrusion depth
-      tilt:   rnd(-0.04, 0.04),   // slight tilt of knob axis
+      offset: rnd(-0.08, 0.08),   // knob centre shifts left/right along edge
+      neck:   rnd(0.09,  0.12),   // narrow neck half-width
+      head:   rnd(0.18,  0.23),   // wider rounded head half-width
+      height: rnd(0.30,  0.38),   // protrusion depth (consistent tab/socket depth)
+      tilt:   0,                  // NO tilt — tilt causes tab/socket misalignment
     };
   }
 
@@ -2062,23 +2124,50 @@ function fitToScreen() {
 }
 
 // Piece size toggle (S / M / L)
-// These scale the board (and therefore each piece). S = small pieces (more
-// board coverage visible), L = large pieces (easier to grab on touch).
-const PSZ_SCALES = { S: 0.55, M: 1.0, L: 1.65 };
+// These set the zoom level — pieces and board stay in world position,
+// we just zoom the viewport. This gives an immediately obvious size
+// difference without moving any pieces.
+// S = zoomed out (see more pieces at once)
+// M = default zoom after fit-to-screen
+// L = zoomed in (pieces are large, easy to grab on touch)
 document.querySelectorAll('.sz-btn').forEach(btn => {
   btn.onclick = () => {
     const lbl = btn.dataset.psz;
     if (game._pszLabel === lbl) return;
     document.querySelectorAll('.sz-btn').forEach(b => b.classList.toggle('active', b.dataset.psz === lbl));
-    const oldScale = game.pieceScale;
-    game.pieceScale = PSZ_SCALES[lbl];
-    game._pszLabel  = lbl;
+    game._pszLabel = lbl;
     if (!document.getElementById('game-screen').classList.contains('hidden') && game.img) {
       if (cfg.mode === 'slider') {
+        // For slider, rebuild at new tile size
+        game.pieceScale = lbl === 'S' ? 0.55 : lbl === 'L' ? 1.65 : 1.0;
         buildSliderFromState();
       } else {
-        // Resize board & pieces WITHOUT re-scattering — preserve piece positions
-        resizeJigsawBoard(oldScale);
+        // For jigsaw, just change zoom — no piece movement at all
+        const vp  = document.getElementById('puzzle-viewport');
+        const vpW = vp.clientWidth  || window.innerWidth - 24;
+        const vpH = vp.clientHeight || Math.min(window.innerHeight * 0.72, 700);
+        // Compute "fit" zoom as the M baseline
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        game.pieces.forEach(p => {
+          minX = Math.min(minX, p.px); minY = Math.min(minY, p.py);
+          maxX = Math.max(maxX, p.px + game.pieceW); maxY = Math.max(maxY, p.py + game.pieceH);
+        });
+        minX = Math.min(minX, game.boardX); minY = Math.min(minY, game.boardY);
+        maxX = Math.max(maxX, game.boardX + game.boardW); maxY = Math.max(maxY, game.boardY + game.boardH);
+        const pad   = 40;
+        const fitZ  = Math.min((vpW - pad*2) / (maxX - minX), (vpH - pad*2) / (maxY - minY), MAX_ZOOM);
+        const baseZ = Math.max(MIN_ZOOM, fitZ);
+        // S = 60% of fit zoom, M = 100%, L = 180%
+        const targetZ = lbl === 'S' ? baseZ * 0.60
+                      : lbl === 'L' ? Math.min(baseZ * 1.80, MAX_ZOOM)
+                      : baseZ;
+        // Zoom toward the board centre
+        const boardCX = (game.boardX + game.boardW / 2) * game.zoom + game.panX;
+        const boardCY = (game.boardY + game.boardH / 2) * game.zoom + game.panY;
+        game.panX = boardCX - (boardCX - game.panX) * (targetZ / game.zoom);
+        game.panY = boardCY - (boardCY - game.panY) * (targetZ / game.zoom);
+        game.zoom = targetZ;
+        drawJigsaw();
       }
     }
   };
@@ -2088,48 +2177,6 @@ document.querySelectorAll('.sz-btn').forEach(btn => {
 document.getElementById('zoom-in-btn').onclick  = () => setZoom(game.zoom + ZOOM_STEP);
 document.getElementById('zoom-out-btn').onclick = () => setZoom(game.zoom - ZOOM_STEP);
 document.getElementById('fit-btn').onclick      = () => fitToScreen();
-
-// ── RESIZE BOARD (S/M/L) — preserves piece positions ─────────
-// Scales the board and pieces proportionally. Each piece's world position
-// is remapped so it stays in the same relative location on screen.
-function resizeJigsawBoard(oldScale) {
-  const N = cfg.cols;
-  const vp  = document.getElementById('puzzle-viewport');
-  const vpW = vp.clientWidth  || window.innerWidth - 24;
-  const vpH = vp.clientHeight || Math.min(window.innerHeight * 0.72, 700);
-
-  const boardFrac = cfg.tray === 'all' ? 0.52
-                  : (cfg.tray === 'left' || cfg.tray === 'right') ? 0.60 : 0.68;
-  const newBoardW = Math.floor(Math.min(vpW * boardFrac, vpH * boardFrac) * game.pieceScale);
-  const oldBoardW = game.boardW;
-  const ratio     = newBoardW / oldBoardW;   // how much everything scales
-
-  const newBoardX = game.boardX; // board stays centred in world
-  const newBoardY = game.boardY;
-
-  // Remap each piece's position: scale relative to board centre
-  const oldCX = game.boardX + oldBoardW / 2;
-  const oldCY = game.boardY + game.boardH / 2;
-
-  game.pieces.forEach(p => {
-    // Offset from board centre → scale → add new board centre
-    p.px = newBoardX + (p.px - game.boardX) * ratio;
-    p.py = newBoardY + (p.py - game.boardY) * ratio;
-    // Update snap positions
-    p.snapPx = newBoardX + p.c * (newBoardW / N);
-    p.snapPy = newBoardY + p.r * (newBoardW / N);
-    // If already snapped, move to correct snap position
-    if (p.snapped) { p.px = p.snapPx; p.py = p.snapPy; }
-  });
-
-  game.boardW = newBoardW;
-  game.boardH = newBoardW;
-  game.pieceW = newBoardW / N;
-  game.pieceH = newBoardW / N;
-
-  // Regenerate tab shapes at new size (same dirs/params, just redrawn at new scale)
-  fitToScreen();
-}
 
 // ══════════════════════════════════════════════════════════════
 //  GAME STATS & WIN
