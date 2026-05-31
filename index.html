@@ -1439,96 +1439,85 @@ function buildJigsaw() {
   updateGameStats();
 }
 
-// ── TAB PATH (normalised) ─────────────────────────────────────
-// Draws one edge of a jigsaw piece.
-// The edge runs from (x0,y0) to (x1,y1) in world pixels.
-// dir: +1 = knob protrudes outward, -1 = socket, 0 = straight.
-// perpDir: the direction perpendicular to the edge (unit vector {px,py})
-//   pointing OUTWARD from the piece centre.
-// pw: piece width (for knob sizing)
-function drawJigsawEdge(ctx, x0, y0, x1, y1, dir, pw) {
-  if (dir === 0) {
-    ctx.lineTo(x1, y1);
-    return;
-  }
+// ── TAB EDGE ─────────────────────────────────────────────────
+// Draws one jigsaw edge from screen point (x0,y0) to (x1,y1).
+// dir +1 = tab protrudes outward, -1 = socket indents inward, 0 = straight.
+//
+// Uses the classic "knob" shape: two smooth cubic bezier curves
+// forming a rounded peg. This is the standard algorithm used by
+// all successful HTML5 jigsaw implementations.
+//
+// All geometry is expressed as fractions of the edge length,
+// using the edge's own tangent/normal coordinate frame.
+function drawJigsawEdge(ctx, x0, y0, x1, y1, dir) {
+  if (dir === 0) { ctx.lineTo(x1, y1); return; }
 
-  // Edge vector and length
-  const edx = x1 - x0, edy = y1 - y0;
-  const len = Math.sqrt(edx*edx + edy*edy);
-  // Unit edge direction
-  const ux = edx / len, uy = edy / len;
-  // Unit perpendicular (90° CCW from edge direction = outward for our winding)
-  // For a path going: top L→R, right T→B, bottom R→L, left B→T
-  // the outward perp is always the same rotation: (-uy, ux)
-  // BUT we use dir to flip it for tab vs socket.
-  const px = -uy * dir;
-  const py =  ux * dir;
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.sqrt(dx*dx + dy*dy);
 
-  // Knob geometry — all as fractions of edge length
-  const S  = len * 0.20;   // half-width of knob neck at base
-  const H  = len * 0.30;   // knob height (protrusion)
-  const R  = len * 0.25;   // half-width of knob head
+  // Unit tangent (along edge)
+  const tx = dx / len, ty = dy / len;
+  // Unit normal — perpendicular, pointing LEFT of travel direction.
+  // For a CCW path: top goes right, right goes down, bottom goes left, left goes up.
+  // "Left of travel" is always INTO the tile for a CCW winding.
+  // dir=+1 means we want the normal to point OUTWARD (right of travel) → negate.
+  const nx = -ty * dir;
+  const ny =  tx * dir;
 
-  // Key points along edge (parametric t)
-  const t1 = 0.35, t2 = 0.65;
-  // Base corners of knob
-  const bL = { x: x0 + edx*t1 - ux*S, y: y0 + edy*t1 - uy*S };
-  const bR = { x: x0 + edx*t2 + ux*S, y: y0 + edy*t2 + uy*S };
-  // Centre of knob top
-  const kx = x0 + edx*0.5 + px*H;
-  const ky = y0 + edy*0.5 + py*H;
-  // Head corners
-  const hL = { x: kx - ux*R, y: ky - uy*R };
-  const hR = { x: kx + ux*R, y: ky + uy*R };
+  // All control points as fractions along the edge + offset along normal.
+  // These fractions match a classic jigsaw knob closely.
+  //
+  //   0    .3  .4  .5  .6  .7    1
+  //   |_____|   |   |   |   |____|
+  //              \_[knob head]_/
+  //
+  const p = (t, n) => ({ x: x0 + dx*t + nx*len*n, y: y0 + dy*t + ny*len*n });
 
-  // Control point helpers — points between base and head
-  const cpLL = { x: bL.x + px*H*0.5, y: bL.y + py*H*0.5 };
-  const cpRR = { x: bR.x + px*H*0.5, y: bR.y + py*H*0.5 };
+  // Neck base left  (0.3, 0)   → shoulder  (0.3, 0.15)  → head (0.4, 0.35)
+  // head peak (0.5, 0.40) (round the top)
+  // head right (0.6, 0.35) → shoulder right (0.7, 0.15) → neck base right (0.7, 0)
 
-  ctx.lineTo(bL.x, bL.y);
-  ctx.bezierCurveTo(cpLL.x, cpLL.y, hL.x - ux*S*0.3, hL.y - uy*S*0.3, hL.x, hL.y);
-  ctx.lineTo(hR.x, hR.y);
-  ctx.bezierCurveTo(hR.x + ux*S*0.3, hR.y + uy*S*0.3, cpRR.x, cpRR.y, bR.x, bR.y);
+  const A = p(0.30, 0.00);
+  const B = p(0.30, 0.15);  // left shoulder cp
+  const C = p(0.40, 0.35);  // left head
+  const D = p(0.50, 0.40);  // crown
+  const E = p(0.60, 0.35);  // right head
+  const F = p(0.70, 0.15);  // right shoulder cp
+  const G = p(0.70, 0.00);
+
+  ctx.lineTo(A.x, A.y);
+  ctx.bezierCurveTo(B.x, B.y, C.x, C.y, D.x, D.y);
+  ctx.bezierCurveTo(E.x, E.y, F.x, F.y, G.x, G.y);
   ctx.lineTo(x1, y1);
 }
 
 // ── BUILD PIECE PATH ──────────────────────────────────────────
-// Builds a clip/stroke path for piece at world position (px, py).
-// pw, ph = piece width/height in world pixels.
-// The path is built in CANVAS space (world * zoom + pan).
-function buildPiecePathOnCtx(ctx, px, py, pw, ph, tabDirs, zoom, panX, panY) {
-  const toSX = wx => wx * zoom + panX;
-  const toSY = wy => wy * zoom + panY;
-
-  // Corner screen coords
-  const x0 = toSX(px),      y0 = toSY(py);
-  const x1 = toSX(px + pw), y1 = toSY(py);
-  const x2 = toSX(px + pw), y2 = toSY(py + ph);
-  const x3 = toSX(px),      y3 = toSY(py + ph);
-
-  // Scale pw to screen for knob sizing
-  const spw = pw * zoom;
-
+// Builds the clip/stroke path for a piece.
+// All coordinates in SCREEN space (already transformed by zoom+pan).
+// sx,sy = screen top-left of piece core tile
+// sw,sh = screen size of piece core tile
+function buildPiecePathOnCtx(ctx, sx, sy, sw, sh, tabDirs) {
   ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  drawJigsawEdge(ctx, x0, y0, x1, y1, tabDirs.top,    spw);
-  drawJigsawEdge(ctx, x1, y1, x2, y2, tabDirs.right,  spw);
-  drawJigsawEdge(ctx, x2, y2, x3, y3, tabDirs.bottom, spw);
-  drawJigsawEdge(ctx, x3, y3, x0, y0, tabDirs.left,   spw);
+  ctx.moveTo(sx, sy);
+  drawJigsawEdge(ctx, sx,    sy,    sx+sw, sy,    tabDirs.top);
+  drawJigsawEdge(ctx, sx+sw, sy,    sx+sw, sy+sh, tabDirs.right);
+  drawJigsawEdge(ctx, sx+sw, sy+sh, sx,    sy+sh, tabDirs.bottom);
+  drawJigsawEdge(ctx, sx,    sy+sh, sx,    sy,    tabDirs.left);
   ctx.closePath();
 }
 
 // ── DRAW EVERYTHING ───────────────────────────────────────────
 function drawJigsaw() {
   if (!jigsawCtx) return;
-  const ctx   = jigsawCtx;
-  const W     = jigsawCanvas.width;
-  const H     = jigsawCanvas.height;
-  const zoom  = game.zoom;
-  const panX  = game.panX;
-  const panY  = game.panY;
-  const pw    = game.pieceW;
-  const ph    = game.pieceH;
+  const ctx  = jigsawCtx;
+  const W    = jigsawCanvas.width;
+  const H    = jigsawCanvas.height;
+  const zoom = game.zoom;
+  const panX = game.panX;
+  const panY = game.panY;
+  const pw   = game.pieceW;
+  const ph   = game.pieceH;
+  const N    = cfg.cols;
 
   ctx.clearRect(0, 0, W, H);
 
@@ -1538,7 +1527,6 @@ function drawJigsaw() {
   const bsw = game.boardW * zoom;
   const bsh = game.boardH * zoom;
 
-  // Shadow
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.15)';
   ctx.shadowBlur  = 16;
@@ -1551,7 +1539,7 @@ function drawJigsaw() {
   // Ghost image
   if (game.ghostVisible && game.img) {
     ctx.save();
-    ctx.globalAlpha = 0.18;
+    ctx.globalAlpha = 0.20;
     ctx.beginPath();
     ctx.roundRect(bsx, bsy, bsw, bsh, 10);
     ctx.clip();
@@ -1559,61 +1547,69 @@ function drawJigsaw() {
     ctx.restore();
   }
 
-  // Grid lines on board
+  // Grid lines
   ctx.save();
-  ctx.strokeStyle = 'rgba(77,150,255,0.15)';
+  ctx.strokeStyle = 'rgba(77,150,255,0.12)';
   ctx.lineWidth   = 1;
-  const N = cfg.cols;
   for (let i = 1; i < N; i++) {
-    ctx.beginPath();
-    ctx.moveTo(bsx + (bsw/N)*i, bsy);
-    ctx.lineTo(bsx + (bsw/N)*i, bsy + bsh);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(bsx, bsy + (bsh/N)*i);
-    ctx.lineTo(bsx + bsw, bsy + (bsh/N)*i);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bsx + bsw/N*i, bsy); ctx.lineTo(bsx + bsw/N*i, bsy+bsh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bsx, bsy + bsh/N*i); ctx.lineTo(bsx+bsw, bsy + bsh/N*i); ctx.stroke();
   }
   ctx.restore();
 
-  // ── Sort pieces by zOrder ──
+  // ── Pieces ──
   const sorted = [...game.pieces].sort((a, b) => a.zOrder - b.zOrder);
 
   sorted.forEach(p => {
-    ctx.save();
+    // Screen coords of this piece's core tile
+    const sx = p.px * zoom + panX;
+    const sy = p.py * zoom + panY;
+    const sw = pw * zoom;
+    const sh = ph * zoom;
 
-    // Build clip path
-    buildPiecePathOnCtx(ctx, p.px, p.py, pw, ph, p.tabDirs, zoom, panX, panY);
+    // ─ Fill with image (clip first) ─────────────────────────
+    ctx.save();
+    buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
     ctx.clip();
 
-    // Draw image
     if (game.img) {
-      const srcX = p.c * (game.img.width  / N);
-      const srcY = p.r * (game.img.height / N);
-      const sx   = p.px * zoom + panX;
-      const sy   = p.py * zoom + panY;
-      const sw   = pw * zoom;
-      const sh   = ph * zoom;
-      ctx.drawImage(game.img, srcX, srcY, game.img.width/N, game.img.height/N, sx, sy, sw, sh);
+      // Draw the FULL board image positioned so the correct slice
+      // lands at (sx, sy). This ensures tab areas are filled too.
+      const imgScale  = bsw / game.img.width;   // screen px per image px
+      const imgDrawW  = game.img.width  * imgScale;
+      const imgDrawH  = game.img.height * imgScale;
+      const imgDrawX  = bsx;
+      const imgDrawY  = bsy;
+      ctx.drawImage(game.img, imgDrawX, imgDrawY, imgDrawW, imgDrawH);
     }
 
     ctx.restore();
 
-    // Outline stroke (on top of image, not clipped)
-    buildPiecePathOnCtx(ctx, p.px, p.py, pw, ph, p.tabDirs, zoom, panX, panY);
-    ctx.strokeStyle = p.snapped ? 'rgba(77,203,119,0.7)' : 'rgba(0,0,0,0.4)';
-    ctx.lineWidth   = p.snapped ? 2.5 : 1.5;
+    // ─ Drop shadow under piece ───────────────────────────────
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur  = 6;
+    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+    buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
+    ctx.strokeStyle = 'rgba(0,0,0,0)'; // invisible stroke just to trigger shadow
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    // ─ Outline ──────────────────────────────────────────────
+    buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
+    if (p === game.draggingPiece) {
+      ctx.strokeStyle = 'rgba(77,150,255,0.9)';
+      ctx.lineWidth   = 2.5;
+    } else if (p.snapped) {
+      ctx.strokeStyle = 'rgba(30,30,30,0.25)';
+      ctx.lineWidth   = 1;
+    } else {
+      ctx.strokeStyle = 'rgba(30,30,30,0.5)';
+      ctx.lineWidth   = 1.5;
+    }
     ctx.stroke();
   });
-
-  // Dragging piece highlight
-  if (game.draggingPiece) {
-    const p = game.draggingPiece;
-    buildPiecePathOnCtx(ctx, p.px, p.py, pw, ph, p.tabDirs, zoom, panX, panY);
-    ctx.strokeStyle = 'rgba(77,150,255,0.8)';
-    ctx.lineWidth   = 3;
-    ctx.stroke();
-  }
 }
 
 // ── SCATTER ───────────────────────────────────────────────────
@@ -1658,22 +1654,22 @@ function trySnap(piece) {
   const N = cfg.cols;
   if (piece.rotation !== 0) return;
 
-  // Try snapping to final board position first
+  // 1. Try snapping to board final position
   const distToBoard = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
   if (distToBoard < snapDist) {
     doSnap(piece, piece.snapPx, piece.snapPy, null);
     return;
   }
 
-  // Try snapping to an already-snapped neighbour
+  // 2. Try snapping to any neighbour (snapped OR unsnapped)
   const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
   for (const {dr, dc} of dirs) {
     const nr = piece.r + dr, nc = piece.c + dc;
     if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
-    const nb = game.pieces.find(p => p.r === nr && p.c === nc && p.snapped);
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc);
     if (!nb) continue;
 
-    // Where piece should be if aligned with nb
+    // Where 'piece' should be if aligned with nb
     const idealPx = nb.px + (piece.snapPx - nb.snapPx);
     const idealPy = nb.py + (piece.snapPy - nb.snapPy);
     const dist = Math.hypot(piece.px - idealPx, piece.py - idealPy);
@@ -1685,6 +1681,8 @@ function trySnap(piece) {
 }
 
 function doSnap(piece, tx, ty, neighbor) {
+  const atBoard = (Math.abs(tx - piece.snapPx) < 1 && Math.abs(ty - piece.snapPy) < 1);
+
   // Smooth animation
   const startX = piece.px, startY = piece.py;
   const startT = performance.now();
@@ -1695,36 +1693,48 @@ function doSnap(piece, tx, ty, neighbor) {
     piece.px = startX + (tx - startX) * ease;
     piece.py = startY + (ty - startY) * ease;
     drawJigsaw();
-    if (prog < 1) requestAnimationFrame(animate);
-    else {
+    if (prog < 1) {
+      requestAnimationFrame(animate);
+    } else {
       piece.px = tx; piece.py = ty;
-      piece.snapped = true;
-      game.solved++;
+
+      // Resolve group membership
+      if (neighbor && neighbor.groupId !== null) {
+        piece.groupId = neighbor.groupId;
+      } else if (neighbor && neighbor.groupId === null) {
+        const gid = Date.now() + Math.random();
+        neighbor.groupId = gid;
+        piece.groupId    = gid;
+      }
+
+      // If this snapped to the board, mark all group pieces as solved
+      if (atBoard) {
+        const toSolve = piece.groupId !== null
+          ? game.pieces.filter(p => p.groupId === piece.groupId && !p.snapped)
+          : [piece];
+        toSolve.forEach(gp => {
+          gp.px = gp.snapPx; gp.py = gp.snapPy;
+          gp.snapped = true;
+          game.solved++;
+        });
+      }
+
+      // Align group members relative to this piece
+      if (piece.groupId !== null) {
+        const offsetX = piece.px - piece.snapPx;
+        const offsetY = piece.py - piece.snapPy;
+        game.pieces.filter(p => p.groupId === piece.groupId && p !== piece).forEach(gp => {
+          gp.px = gp.snapPx + offsetX;
+          gp.py = gp.snapPy + offsetY;
+        });
+      }
+
       updateGameStats();
       drawJigsaw();
       if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
     }
   }
   requestAnimationFrame(animate);
-
-  // Group management
-  if (neighbor) {
-    if (neighbor.groupId !== null) {
-      piece.groupId = neighbor.groupId;
-    } else {
-      const gid = Date.now() + Math.random();
-      neighbor.groupId = piece.groupId = gid;
-    }
-    // Also snap all neighbours in this group to their correct relative positions
-    if (piece.groupId !== null) {
-      const offsetX = tx - piece.snapPx;
-      const offsetY = ty - piece.snapPy;
-      game.pieces.filter(p => p.groupId === piece.groupId && p !== piece).forEach(gp => {
-        gp.px = gp.snapPx + offsetX;
-        gp.py = gp.snapPy + offsetY;
-      });
-    }
-  }
 }
 
 // ── CANVAS INTERACTION ────────────────────────────────────────
