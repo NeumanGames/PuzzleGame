@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Puzzle Play! – NeumanGames™</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ──────────────────────────────────────────────── */
+:root {
+  --cream:   #FFF8ED;
+  --navy:    #1A2B4A;
+  --red:     #FF4757;
+  --orange:  #FF7F50;
+  --yellow:  #FFD93D;
+  --green:   #6BCB77;
+  --blue:    #4D96FF;
+  --purple:  #C77DFF;
+  --pink:    #FF6EB4;
+  --teal:    #00D2C6;
+  --card-radius: 14px;
+  --font-display: 'Fredoka One', cursive;
+  --font-body: 'Nunito', sans-serif;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+
+html { height:100%; }
+body {
+  min-height:100%; display:flex; flex-direction:column; align-items:stretch;
+  background-color:var(--cream);
+  background-image:
+    radial-gradient(circle at 15% 20%,rgba(255,71,87,.12) 0 60px,transparent 60px),
+    radial-gradient(circle at 85% 15%,rgba(77,150,255,.12) 0 80px,transparent 80px),
+    radial-gradient(circle at 10% 80%,rgba(107,203,119,.12) 0 70px,transparent 70px),
+    radial-gradient(circle at 90% 85%,rgba(255,211,61,.18) 0 90px,transparent 90px);
+  font-family:var(--font-body); color:var(--navy); overflow-x:hidden;
+}
+
+#page-content {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  padding:12px 10px 16px; width:100%;
+}
+
+/* ── HEADER ──────────────────────────────────────────────── */
+header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
+.logo {
+  font-family:var(--font-display);
+  font-size:clamp(1.8rem,5.5vw,3.2rem);
+  color:var(--navy);
+  text-shadow:3px 4px 0 rgba(77,150,255,.35);
+  letter-spacing:1px; line-height:1;
+}
+.logo span { color:var(--blue); }
+.subtitle { font-size:clamp(.65rem,2vw,.85rem); font-weight:700; color:#999; letter-spacing:2px; text-transform:uppercase; margin-top:2px; }
+
+/* ── SCREENS ─────────────────────────────────────────────── */
+.screen { width:100%; max-width:1100px; }
+.screen.hidden { display:none !important; }
+
+/* ── SETUP SCREEN ────────────────────────────────────────── */
+#setup-screen {
+  display:flex; flex-direction:column; align-items:center; gap:20px; margin-top:8px; padding-bottom:8px;
+}
+.setup-section { width:100%; max-width:780px; }
+.setup-label {
+  font-family:var(--font-display); font-size:1.15rem; color:var(--navy);
+  margin-bottom:8px; display:flex; align-items:center; gap:8px;
+}
+.setup-label .badge {
+  background:var(--navy); color:#fff; font-family:var(--font-body);
+  font-size:.6rem; font-weight:800; letter-spacing:1px;
+  text-transform:uppercase; padding:2px 7px; border-radius:20px;
+}
+.pill-group { display:flex; flex-wrap:wrap; gap:8px; }
+.pill {
+  font-family:var(--font-display); font-size:.95rem; padding:9px 16px;
+  border-radius:50px; border:3px solid transparent; cursor:pointer;
+  transition:transform .15s,box-shadow .15s,background .15s;
+  background:#fff; color:var(--navy); box-shadow:0 3px 0 rgba(0,0,0,.12);
+  user-select:none; text-align:center; line-height:1.3;
+}
+.pill:hover  { transform:translateY(-2px); box-shadow:0 5px 0 rgba(0,0,0,.12); }
+.pill.selected { color:#fff; transform:translateY(-2px); box-shadow:0 5px 0 rgba(0,0,0,.2); }
+.pill[data-mode="jigsaw"].selected  { background:var(--blue);   box-shadow:0 5px 0 #1a57c9; }
+.pill[data-mode="slider"].selected  { background:var(--purple); box-shadow:0 5px 0 #7a1fb0; }
+.pill[data-sz].selected   { background:var(--navy); box-shadow:0 5px 0 #000; }
+.pill[data-tray].selected { background:var(--teal); box-shadow:0 5px 0 #008a82; }
+.pill[data-adv].selected  { background:var(--orange); box-shadow:0 5px 0 #b84e00; }
+
+/* Image picker section */
+.img-picker-tabs { display:flex; gap:6px; margin-bottom:10px; }
+.img-tab {
+  font-family:var(--font-display); font-size:.9rem; padding:7px 14px;
+  border-radius:40px; border:none; cursor:pointer;
+  background:#fff; color:#888; box-shadow:0 3px 0 rgba(0,0,0,.1);
+  transition:all .15s;
+}
+.img-tab.active { background:var(--navy); color:#fff; box-shadow:0 3px 0 #000; }
+.img-tab-panel { display:none; }
+.img-tab-panel.active { display:block; }
+
+.img-category-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px;
+}
+.img-cat-card {
+  border-radius:14px; border:3px solid transparent; cursor:pointer;
+  background:#fff; box-shadow:0 3px 0 rgba(0,0,0,.1);
+  overflow:hidden; transition:transform .15s,box-shadow .15s,border-color .15s;
+  display:flex; flex-direction:column; align-items:center;
+}
+.img-cat-card:hover { transform:translateY(-2px); box-shadow:0 6px 0 rgba(0,0,0,.13); }
+.img-cat-card.selected { border-color:var(--blue); box-shadow:0 5px 0 #1a57c9; transform:translateY(-2px); }
+.img-cat-emoji { font-size:2rem; padding:10px 0 4px; line-height:1; }
+.img-cat-name { font-family:var(--font-display); font-size:.8rem; color:var(--navy); padding-bottom:8px; text-align:center; }
+
+.img-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:8px; margin-top:10px; }
+.img-thumb {
+  border-radius:10px; overflow:hidden; cursor:pointer;
+  border:3px solid transparent; transition:transform .15s,border-color .15s;
+  aspect-ratio:1; background:#eee;
+}
+.img-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.img-thumb:hover { transform:scale(1.04); }
+.img-thumb.selected { border-color:var(--blue); box-shadow:0 0 0 3px rgba(77,150,255,.3); }
+
+.img-search-row { display:flex; gap:8px; margin-bottom:10px; }
+.img-search-input {
+  flex:1; font-family:var(--font-body); font-weight:700; font-size:.95rem;
+  padding:9px 14px; border:3px solid #ddd; border-radius:14px; outline:none;
+  background:#fff; transition:border-color .2s;
+}
+.img-search-input:focus { border-color:var(--blue); }
+.img-search-btn {
+  font-family:var(--font-display); font-size:.95rem;
+  padding:9px 18px; border-radius:14px; border:none; cursor:pointer;
+  background:var(--blue); color:#fff; box-shadow:0 4px 0 #1a57c9;
+  transition:transform .12s,box-shadow .12s;
+}
+.img-search-btn:hover  { transform:translateY(-2px); box-shadow:0 6px 0 #1a57c9; }
+.img-search-btn:active { transform:translateY(3px);  box-shadow:0 1px 0 #1a57c9; }
+
+.upload-zone {
+  border:3px dashed #ccc; border-radius:16px; padding:28px;
+  text-align:center; cursor:pointer; transition:border-color .2s,background .2s;
+  font-family:var(--font-display); color:#aaa; font-size:1.1rem;
+}
+.upload-zone:hover { border-color:var(--blue); background:rgba(77,150,255,.05); color:var(--blue); }
+.upload-zone.has-image { border-color:var(--green); background:rgba(107,203,119,.05); }
+#upload-input { display:none; }
+
+.selected-img-preview {
+  display:flex; align-items:center; gap:12px; margin-top:8px;
+  background:#fff; border-radius:14px; padding:10px 14px;
+  box-shadow:0 3px 0 rgba(0,0,0,.08);
+}
+.selected-img-preview img { width:52px; height:52px; object-fit:cover; border-radius:8px; flex-shrink:0; }
+.selected-img-info { flex:1; min-width:0; }
+.selected-img-name { font-weight:800; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.selected-img-src  { font-size:.75rem; color:#999; }
+.save-img-btn {
+  font-family:var(--font-display); font-size:.8rem;
+  padding:6px 12px; border-radius:30px; border:none; cursor:pointer;
+  background:var(--green); color:#fff; box-shadow:0 3px 0 #3a8a44;
+  transition:transform .12s; flex-shrink:0;
+}
+.save-img-btn:hover { transform:translateY(-1px); }
+
+.saved-imgs-list {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:8px; margin-top:6px;
+}
+.saved-img-item {
+  border-radius:10px; overflow:hidden; cursor:pointer; position:relative;
+  border:3px solid transparent; aspect-ratio:1; transition:transform .15s,border-color .15s;
+}
+.saved-img-item img { width:100%; height:100%; object-fit:cover; }
+.saved-img-item:hover { transform:scale(1.04); }
+.saved-img-item.selected { border-color:var(--blue); }
+.saved-img-del {
+  position:absolute; top:2px; right:2px; background:rgba(255,71,87,.85);
+  border:none; border-radius:50%; width:20px; height:20px;
+  color:#fff; font-size:.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .15s;
+}
+.saved-img-item:hover .saved-img-del { opacity:1; }
+
+.start-btn {
+  font-family:var(--font-display); font-size:1.5rem;
+  padding:16px 52px; border-radius:60px; border:none; cursor:pointer;
+  background:var(--green); color:#fff; box-shadow:0 7px 0 #3a8a44;
+  transition:transform .12s,box-shadow .12s;
+}
+.start-btn:hover  { transform:translateY(-3px); box-shadow:0 10px 0 #3a8a44; }
+.start-btn:active { transform:translateY(4px);  box-shadow:0 3px 0 #3a8a44; }
+.start-btn:disabled { background:#ccc; box-shadow:0 4px 0 #aaa; cursor:not-allowed; transform:none; }
+
+.setup-help-btn {
+  font-family:var(--font-body); font-weight:700; font-size:.9rem;
+  color:#aaa; background:none; border:none; cursor:pointer;
+  padding:4px 8px; border-radius:8px; transition:color .15s,background .15s; margin-top:-8px;
+}
+.setup-help-btn:hover { color:var(--blue); background:rgba(77,150,255,.08); }
+
+/* ── GAME SCREEN ─────────────────────────────────────────── */
+#game-screen { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; }
+
+#game-toolbar {
+  display:flex; align-items:center; justify-content:space-between;
+  width:100%; max-width:1100px; gap:8px; flex-shrink:0; flex-wrap:wrap;
+}
+.toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1; }
+.toolbar-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+
+.stat-chip {
+  background:#fff; border-radius:40px; padding:8px 14px;
+  box-shadow:0 3px 0 rgba(0,0,0,.1);
+  display:flex; align-items:center; gap:6px;
+  font-family:var(--font-display); font-size:1rem; white-space:nowrap;
+}
+.stat-chip .stat-label { font-family:var(--font-body); font-size:.65rem; font-weight:800; color:#aaa; text-transform:uppercase; margin-top:1px; }
+.stat-chip .stat-val   { color:var(--navy); }
+
+.icon-btn {
+  width:44px; height:44px; border-radius:50%; border:none; cursor:pointer;
+  font-size:1.2rem; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 0 rgba(0,0,0,.2);
+  transition:transform .12s,box-shadow .12s; user-select:none; flex-shrink:0;
+}
+.icon-btn:hover  { transform:translateY(-2px); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+.icon-btn:active { transform:translateY(3px);  box-shadow:0 1px 0 rgba(0,0,0,.15); }
+.icon-btn.help   { background:var(--yellow); color:var(--navy); box-shadow:0 4px 0 #c9a600; }
+.icon-btn.help:hover    { box-shadow:0 6px 0 #c9a600; }
+.icon-btn.home   { background:var(--red); color:#fff; box-shadow:0 4px 0 #b3001b; }
+.icon-btn.home:hover    { box-shadow:0 6px 0 #b3001b; }
+.icon-btn.zoom-in  { background:#fff; color:var(--navy); box-shadow:0 4px 0 #bbb; }
+.icon-btn.zoom-out { background:#fff; color:var(--navy); box-shadow:0 4px 0 #bbb; }
+.icon-btn.preview-btn { background:var(--purple); color:#fff; box-shadow:0 4px 0 #7a1fb0; }
+.icon-btn.preview-btn:hover { box-shadow:0 6px 0 #7a1fb0; }
+
+/* Puzzle viewport */
+#puzzle-viewport {
+  position:relative; overflow:hidden; cursor:grab;
+  border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,.18);
+  background:rgba(255,255,255,.6);
+  user-select:none; -webkit-user-select:none;
+  touch-action:none;
+  width:100%; max-width:1100px;
+}
+#puzzle-viewport.panning { cursor:grabbing; }
+
+#puzzle-world {
+  position:absolute; top:0; left:0;
+  transform-origin:0 0;
+  will-change:transform;
+}
+
+/* Board and tray areas inside world */
+#board-area {
+  position:absolute;
+  background:rgba(255,255,255,.85);
+  border-radius:12px;
+  box-shadow:0 0 0 3px rgba(77,150,255,.25),0 4px 20px rgba(0,0,0,.08);
+  overflow:hidden;
+}
+#board-ghost {
+  position:absolute; inset:0; opacity:0.13; pointer-events:none;
+  background-size:100% 100%; background-position:center; background-repeat:no-repeat;
+  border-radius:12px;
+  transition:opacity .3s;
+}
+#board-ghost.visible { opacity:0.2; }
+
+/* Piece styling */
+.piece {
+  position:absolute; cursor:grab; user-select:none;
+  will-change:transform;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.22));
+  touch-action:none;
+}
+.piece.dragging { cursor:grabbing; filter:drop-shadow(0 8px 18px rgba(0,0,0,.4)); z-index:1000 !important; }
+.piece.snapping { transition:left .18s cubic-bezier(.2,.8,.3,1.1),top .18s cubic-bezier(.2,.8,.3,1.1); }
+.piece canvas { display:block; pointer-events:none; }
+
+/* Tray indicators */
+.tray-zone {
+  position:absolute;
+  background:rgba(77,150,255,.06);
+  border:2px dashed rgba(77,150,255,.25);
+  border-radius:10px;
+  pointer-events:none;
+}
+
+/* Slider-specific */
+#slider-board {
+  position:relative; display:grid;
+  gap:3px; background:var(--navy);
+  border-radius:12px; overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.25);
+}
+.slider-tile {
+  position:relative; overflow:hidden; cursor:pointer;
+  transition:transform .08s;
+  background:#eee;
+}
+.slider-tile:hover { transform:scale(0.97); }
+.slider-tile.empty { background:rgba(0,0,0,.15); cursor:default; }
+.slider-tile.empty:hover { transform:none; }
+.slider-tile canvas { display:block; }
+
+/* ── MODAL ────────────────────────────────────────────────── */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(20,30,50,.55);
+  backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  z-index:500; padding:20px;
+  opacity:0; pointer-events:none; transition:opacity .2s;
+}
+.modal-overlay.open { opacity:1; pointer-events:all; }
+.modal-box {
+  background:#fff; border-radius:28px; padding:28px 24px;
+  max-width:520px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.25);
+  transform:scale(.92); transition:transform .2s;
+  display:flex; flex-direction:column; gap:16px; max-height:90vh; overflow-y:auto;
+}
+.modal-overlay.open .modal-box { transform:scale(1); }
+.modal-title { font-family:var(--font-display); font-size:1.7rem; color:var(--navy); text-align:center; }
+.modal-body  { font-size:.95rem; line-height:1.6; color:#444; }
+.modal-body ul { list-style:none; padding:0; display:flex; flex-direction:column; gap:8px; }
+.modal-body li { display:flex; gap:10px; align-items:flex-start; }
+.modal-body li .mi { font-size:1.2rem; flex-shrink:0; }
+.modal-close {
+  align-self:center; font-family:var(--font-display); font-size:1.15rem;
+  padding:11px 32px; border-radius:50px; border:none; cursor:pointer;
+  background:var(--green); color:#fff; box-shadow:0 5px 0 #3a8a44;
+  transition:transform .12s,box-shadow .12s;
+}
+.modal-close:hover  { transform:translateY(-2px); box-shadow:0 7px 0 #3a8a44; }
+.modal-close:active { transform:translateY(3px);  box-shadow:0 2px 0 #3a8a44; }
+.menu-actions { display:flex; flex-direction:column; gap:10px; }
+.menu-btn {
+  font-family:var(--font-display); font-size:1.15rem;
+  padding:13px 16px; border-radius:16px; border:none; cursor:pointer;
+  transition:transform .12s; text-align:left;
+  display:flex; align-items:center; gap:12px;
+}
+.menu-btn:hover  { transform:translateY(-2px); }
+.menu-btn:active { transform:translateY(2px); }
+.menu-btn.restart  { background:#FFF0F0; color:var(--red);    box-shadow:0 4px 0 #ffc5c5; }
+.menu-btn.newgame  { background:#F0F6FF; color:var(--blue);   box-shadow:0 4px 0 #b8d4ff; }
+.menu-btn.resume   { background:#F0FFF4; color:#2d8a45;       box-shadow:0 4px 0 #b2e8be; }
+.menu-btn.help-opt { background:#FFFBF0; color:#b07000;       box-shadow:0 4px 0 #ffe09a; }
+.menu-btn.ghost-opt{ background:#F5F0FF; color:#7a1fb0;       box-shadow:0 4px 0 #d4b8ff; }
+
+/* Preview overlay */
+#preview-overlay {
+  position:fixed; inset:0; background:rgba(10,18,35,.82);
+  display:flex; align-items:center; justify-content:center;
+  z-index:600; opacity:0; pointer-events:none; transition:opacity .25s;
+  padding:20px;
+}
+#preview-overlay.open { opacity:1; pointer-events:all; }
+#preview-overlay img {
+  max-width:min(90vw,700px); max-height:80vh; border-radius:16px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5); object-fit:contain;
+}
+#preview-overlay-close {
+  position:absolute; top:16px; right:16px;
+  background:#fff; border:none; border-radius:50%; width:40px; height:40px;
+  font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+
+/* ── WIN SCREEN ──────────────────────────────────────────── */
+#win-screen {
+  display:flex; flex-direction:column; align-items:center;
+  gap:18px; text-align:center; padding:20px 0 12px;
+}
+.win-trophy { font-size:4.5rem; animation:bounce 1s infinite alternate ease-in-out; }
+@keyframes bounce { from{transform:translateY(0)} to{transform:translateY(-12px)} }
+.win-title {
+  font-family:var(--font-display); font-size:clamp(1.8rem,7vw,3.2rem);
+  color:var(--navy); text-shadow:3px 4px 0 rgba(255,211,61,.6);
+}
+.win-stats {
+  display:flex; flex-wrap:wrap; gap:12px; justify-content:center;
+}
+.win-stat-card {
+  background:#fff; border-radius:16px; padding:14px 22px;
+  box-shadow:0 5px 0 rgba(0,0,0,.1); min-width:100px; text-align:center;
+}
+.win-stat-val   { font-family:var(--font-display); font-size:2rem; color:var(--blue); line-height:1; }
+.win-stat-label { font-size:.7rem; font-weight:800; color:#aaa; text-transform:uppercase; letter-spacing:1px; }
+.win-best { font-family:var(--font-display); font-size:1.1rem; color:var(--green); }
+.win-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+.win-btn {
+  font-family:var(--font-display); font-size:1.2rem;
+  padding:13px 28px; border-radius:50px; border:none; cursor:pointer;
+  transition:transform .12s,box-shadow .12s;
+}
+.win-btn.again   { background:var(--green);  color:#fff; box-shadow:0 6px 0 #3a8a44; }
+.win-btn.again:hover   { transform:translateY(-2px); box-shadow:0 8px 0 #3a8a44; }
+.win-btn.newgame { background:var(--blue);   color:#fff; box-shadow:0 6px 0 #1a57c9; }
+.win-btn.newgame:hover { transform:translateY(-2px); box-shadow:0 8px 0 #1a57c9; }
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+footer {
+  margin-top:auto; width:100%;
+  background:linear-gradient(180deg,#1A2B4A 0%,#0d1b33 100%);
+  border-radius:20px 20px 0 0;
+  padding:20px 24px 26px;
+  display:flex; flex-direction:column; align-items:center; gap:14px; flex-shrink:0;
+}
+.footer-brand-row { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.footer-brand { font-family:var(--font-display); color:#fff; font-size:1.2rem; display:flex; align-items:center; gap:8px; }
+.footer-brand span { color:var(--yellow); }
+.footer-tagline { font-size:.75rem; color:rgba(255,255,255,.5); font-weight:700; }
+.footer-btns { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+.footer-btn {
+  font-family:var(--font-display); font-size:.95rem;
+  padding:11px 22px; border-radius:50px; border:none; cursor:pointer;
+  display:flex; align-items:center; gap:7px; text-decoration:none;
+  transition:transform .12s,box-shadow .12s; box-shadow:0 5px 0 rgba(0,0,0,.25);
+}
+.footer-btn:hover  { transform:translateY(-2px); box-shadow:0 7px 0 rgba(0,0,0,.3); }
+.footer-btn:active { transform:translateY(3px);  box-shadow:0 2px 0 rgba(0,0,0,.2); }
+.footer-btn.how-to  { background:#e8e8e8; color:var(--navy); box-shadow:0 5px 0 #aaa; }
+.footer-btn.how-to:hover  { box-shadow:0 7px 0 #aaa; }
+.footer-btn.kofi    { background:var(--orange); color:#fff; box-shadow:0 5px 0 #b84e00; }
+.footer-btn.kofi:hover    { box-shadow:0 7px 0 #b84e00; }
+.footer-btn.patreon { background:var(--yellow); color:var(--navy); box-shadow:0 5px 0 #c9a600; }
+.footer-btn.patreon:hover { box-shadow:0 7px 0 #c9a600; }
+.footer-copy { font-size:.68rem; color:rgba(255,255,255,.35); text-align:center; line-height:1.6; }
+.footer-copy a { color:rgba(255,255,255,.5); text-decoration:none; }
+.footer-copy a:hover { color:#fff; }
+
+/* confetti canvas */
+#confetti-canvas { position:fixed; inset:0; pointer-events:none; z-index:999; }
+
+/* Piece size toggle */
+#size-toggle {
+  display:flex; background:#fff; border-radius:40px;
+  box-shadow:0 3px 0 rgba(0,0,0,.1); overflow:hidden; flex-shrink:0;
+}
+.sz-btn {
+  font-family:var(--font-display); font-size:.8rem;
+  padding:7px 11px; border:none; cursor:pointer; background:transparent;
+  color:#aaa; transition:background .15s,color .15s; white-space:nowrap; line-height:1;
+}
+.sz-btn.active { background:var(--navy); color:#fff; border-radius:40px; }
+
+/* spinner */
+.spinner { display:inline-block; width:28px; height:28px; border:3px solid #eee; border-top-color:var(--blue); border-radius:50%; animation:spin .7s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* unsplash credit */
+#unsplash-credit { font-size:.7rem; color:#aaa; text-align:center; margin-top:4px; }
+#unsplash-credit a { color:var(--blue); text-decoration:none; }
+
+@media(max-width:600px) {
+  .start-btn { font-size:1.2rem; padding:14px 32px; }
+  .footer-btn { font-size:.85rem; padding:10px 16px; }
+  .img-category-grid { grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); }
+}
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+
+<!-- Preview overlay -->
+<div id="preview-overlay">
+  <button id="preview-overlay-close">✕</button>
+  <img id="preview-overlay-img" src="" alt="Puzzle preview">
+</div>
+
+<!-- Setup Help Modal -->
+<div class="modal-overlay" id="setup-help-modal">
+  <div class="modal-box">
+    <div class="modal-title">❓ Game Options</div>
+    <div class="modal-body">
+      <ul>
+        <li><span class="mi">🧩</span><span><strong>Jigsaw Mode</strong> — drag and snap interlocking pieces together on the board.</span></li>
+        <li><span class="mi">🔢</span><span><strong>Slider Mode</strong> — slide tiles into the empty space to restore the picture.</span></li>
+        <li><span class="mi">📐</span><span><strong>Puzzle Size</strong> — from 3×3 (9 pieces, great for little ones!) up to 8×8 (64 pieces).</span></li>
+        <li><span class="mi">🖼️</span><span><strong>Image</strong> — pick a built-in image, search Unsplash, or upload your own photo.</span></li>
+        <li><span class="mi">📦</span><span><strong>Tray Position</strong> — choose where loose pieces wait: all sides, top, bottom, left, or right.</span></li>
+        <li><span class="mi">🔄</span><span><strong>Rotation (Advanced)</strong> — pieces start rotated; you must rotate them to snap.</span></li>
+        <li><span class="mi">💾</span><span><strong>Save Image</strong> — heart any image to save it for future puzzles.</span></li>
+      </ul>
+    </div>
+    <button class="modal-close" id="setup-help-close">Got it!</button>
+  </div>
+</div>
+
+<!-- Gameplay Help Modal -->
+<div class="modal-overlay" id="gameplay-help-modal">
+  <div class="modal-box">
+    <div class="modal-title">❓ How to Play</div>
+    <div class="modal-body" id="gameplay-help-body">
+      <!-- filled by JS based on mode -->
+    </div>
+    <a class="modal-close" style="text-decoration:none;display:block;text-align:center" href="https://github.com/NeumanGames/puzzle-game#readme" target="_blank" rel="noopener noreferrer">📖 Full Instructions</a>
+    <button class="modal-close" id="gameplay-help-close">Got it! Let's Puzzle! 🧩</button>
+  </div>
+</div>
+
+<!-- Menu Modal -->
+<div class="modal-overlay" id="menu-modal">
+  <div class="modal-box">
+    <div class="modal-title">🏠 Game Menu</div>
+    <div class="menu-actions">
+      <button class="menu-btn resume"   id="menu-resume" >▶ &nbsp;Resume Puzzle</button>
+      <button class="menu-btn restart"  id="menu-restart">🔄 &nbsp;Restart This Puzzle</button>
+      <button class="menu-btn newgame"  id="menu-newgame">🏠 &nbsp;New Puzzle Setup</button>
+      <button class="menu-btn ghost-opt" id="menu-ghost">👻 &nbsp;Toggle Ghost Image</button>
+      <button class="menu-btn help-opt" id="menu-help"  >❓ &nbsp;How to Play</button>
+    </div>
+  </div>
+</div>
+
+<!-- All visible page content -->
+<div id="page-content">
+
+  <header>
+    <div class="logo">Puzzle <span>Play!</span></div>
+    <div class="subtitle">NeumanGames™ · For Curious Minds</div>
+  </header>
+
+  <!-- ══ SETUP SCREEN ══════════════════════════════════════════ -->
+  <section id="setup-screen" class="screen">
+
+    <!-- Game Mode -->
+    <div class="setup-section">
+      <div class="setup-label">🎮 Game Mode <span class="badge">Pick One</span></div>
+      <div class="pill-group" id="mode-pills">
+        <button class="pill selected" data-mode="jigsaw">🧩 Jigsaw<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">Drag &amp; snap pieces</small></button>
+        <button class="pill" data-mode="slider">🔢 Slider<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">Slide to solve</small></button>
+      </div>
+    </div>
+
+    <!-- Puzzle Size -->
+    <div class="setup-section">
+      <div class="setup-label">📐 Puzzle Size <span class="badge">Pick One</span></div>
+      <div class="pill-group" id="sz-pills">
+        <button class="pill selected" data-sz="3">🐣 Tiny<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">3×3 · 9 pieces</small></button>
+        <button class="pill" data-sz="4">🌱 Easy<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">4×4 · 16 pieces</small></button>
+        <button class="pill" data-sz="5">🦊 Medium<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">5×5 · 25 pieces</small></button>
+        <button class="pill" data-sz="6">🚀 Hard<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">6×6 · 36 pieces</small></button>
+        <button class="pill" data-sz="7">🏆 Expert<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">7×7 · 49 pieces</small></button>
+        <button class="pill" data-sz="8">💥 Master<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">8×8 · 64 pieces</small></button>
+      </div>
+    </div>
+
+    <!-- Tray Position (jigsaw only) -->
+    <div class="setup-section" id="tray-section">
+      <div class="setup-label">📦 Tray Position <span class="badge">Pick One</span></div>
+      <div class="pill-group" id="tray-pills">
+        <button class="pill selected" data-tray="all">⬛ All Sides</button>
+        <button class="pill" data-tray="top">⬆ Top</button>
+        <button class="pill" data-tray="bottom">⬇ Bottom</button>
+        <button class="pill" data-tray="left">⬅ Left</button>
+        <button class="pill" data-tray="right">➡ Right</button>
+      </div>
+    </div>
+
+    <!-- Advanced Options -->
+    <div class="setup-section" id="adv-section">
+      <div class="setup-label">⚙️ Advanced Options <span class="badge">Toggle</span></div>
+      <div class="pill-group" id="adv-pills">
+        <button class="pill" data-adv="rotation">🔄 Piece Rotation<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">Off by default</small></button>
+        <button class="pill" data-adv="nostraight">🌊 Wavy Edges<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">No straight borders</small></button>
+        <button class="pill" data-adv="timer">⏱ Timer<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">Race the clock</small></button>
+        <button class="pill" data-adv="ghost">👻 Ghost Image<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">Faint guide shown</small></button>
+      </div>
+    </div>
+
+    <!-- Image Picker -->
+    <div class="setup-section">
+      <div class="setup-label">🖼️ Choose an Image <span class="badge">Required</span></div>
+      <div class="img-picker-tabs">
+        <button class="img-tab active" data-tab="builtin">🎨 Built-In</button>
+        <button class="img-tab" data-tab="unsplash">🔍 Search Web</button>
+        <button class="img-tab" data-tab="upload">📁 Upload</button>
+        <button class="img-tab" data-tab="saved">💾 Saved</button>
+      </div>
+
+      <!-- Built-in tab -->
+      <div class="img-tab-panel active" id="tab-builtin">
+        <div class="img-category-grid" id="builtin-cats"></div>
+        <div class="img-grid" id="builtin-imgs" style="margin-top:12px"></div>
+      </div>
+
+      <!-- Unsplash tab -->
+      <div class="img-tab-panel" id="tab-unsplash">
+        <div class="img-search-row">
+          <input class="img-search-input" id="unsplash-search-input" type="text" placeholder="Search for anything… (e.g. cats, space, castles)">
+          <button class="img-search-btn" id="unsplash-search-btn">🔍 Search</button>
+        </div>
+        <div class="pill-group" id="unsplash-cat-pills" style="margin-bottom:10px"></div>
+        <div id="unsplash-results"></div>
+        <div id="unsplash-credit"></div>
+      </div>
+
+      <!-- Upload tab -->
+      <div class="img-tab-panel" id="tab-upload">
+        <div class="upload-zone" id="upload-zone">
+          📷 Tap to upload a photo<br>
+          <small style="font-size:.75rem;font-weight:700;color:#bbb">JPG, PNG, GIF, WebP supported</small>
+        </div>
+        <input type="file" id="upload-input" accept="image/*">
+      </div>
+
+      <!-- Saved tab -->
+      <div class="img-tab-panel" id="tab-saved">
+        <div id="saved-imgs-container">
+          <p style="color:#aaa;font-size:.9rem;font-weight:700;margin-bottom:8px">No saved images yet — use the 💾 button to save your favorites!</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Selected image preview -->
+    <div class="setup-section" id="selected-preview" style="display:none">
+      <div class="selected-img-preview" id="selected-preview-inner">
+        <img id="selected-preview-img" src="" alt="">
+        <div class="selected-img-info">
+          <div class="selected-img-name" id="selected-preview-name">Image name</div>
+          <div class="selected-img-src"  id="selected-preview-src">Source</div>
+        </div>
+        <button class="save-img-btn" id="save-img-btn">💾 Save</button>
+      </div>
+    </div>
+
+    <button class="start-btn" id="start-btn" disabled>▶ Start Puzzle!</button>
+    <button class="setup-help-btn" id="setup-help-btn">❓ How do the options work?</button>
+  </section>
+
+  <!-- ══ GAME SCREEN ════════════════════════════════════════════ -->
+  <section id="game-screen" class="screen hidden">
+    <div id="game-toolbar">
+      <div class="toolbar-left">
+        <div class="stat-chip">
+          <span id="stat-pieces-val" class="stat-val">0/0</span>
+          <div class="stat-label">pieces</div>
+        </div>
+        <div class="stat-chip" id="stat-moves-chip">
+          <span id="stat-moves-val" class="stat-val">0</span>
+          <div class="stat-label">moves</div>
+        </div>
+        <div class="stat-chip" id="stat-timer-chip" style="display:none">
+          <span id="stat-timer-val" class="stat-val">0:00</span>
+          <div class="stat-label">time</div>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <div id="size-toggle" title="Piece size">
+          <button class="sz-btn" data-psz="S">S</button>
+          <button class="sz-btn active" data-psz="M">M</button>
+          <button class="sz-btn" data-psz="L">L</button>
+        </div>
+        <button class="icon-btn zoom-out" id="zoom-out-btn" title="Zoom out">➖</button>
+        <button class="icon-btn zoom-in"  id="zoom-in-btn"  title="Zoom in">➕</button>
+        <button class="icon-btn preview-btn" id="preview-btn" title="Preview image">👁️</button>
+        <button class="icon-btn help" id="help-btn" title="How to play">❓</button>
+        <button class="icon-btn home" id="home-btn" title="Menu">🏠</button>
+      </div>
+    </div>
+
+    <!-- Jigsaw viewport -->
+    <div id="puzzle-viewport" style="display:none">
+      <div id="puzzle-world">
+        <div id="board-area">
+          <div id="board-ghost"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slider board (shown in slider mode) -->
+    <div id="slider-board" style="display:none"></div>
+
+    <div id="slider-best" style="font-family:var(--font-display);font-size:.95rem;color:#aaa;margin-top:4px;display:none">
+      Best: <span id="slider-best-val">—</span> moves
+    </div>
+    <!-- Unsplash attribution — shown whenever an Unsplash photo is active -->
+    <div id="ingame-attribution" style="font-size:.72rem;color:#aaa;margin-top:6px;text-align:center;display:none"></div>
+  </section>
+
+  <!-- ══ WIN SCREEN ═════════════════════════════════════════════ -->
+  <section id="win-screen" class="screen hidden">
+    <div class="win-trophy">🏆</div>
+    <div class="win-title">Puzzle Complete!</div>
+    <div class="win-stats" id="win-stats"></div>
+    <div class="win-best" id="win-best" style="display:none"></div>
+    <div class="win-actions">
+      <button class="win-btn again"   id="win-again">🔄 Play Again</button>
+      <button class="win-btn newgame" id="win-new">🏠 New Puzzle</button>
+    </div>
+  </section>
+
+</div><!-- #page-content -->
+
+<footer>
+  <div class="footer-brand-row">
+    <div class="footer-brand">🎮 Neuman<span>Games™</span></div>
+    <div class="footer-tagline">Free Learning Games for Everyone</div>
+  </div>
+  <div class="footer-btns">
+    <a class="footer-btn how-to" href="https://github.com/NeumanGames/puzzle-game#readme" target="_blank" rel="noopener noreferrer">📖 How to Play</a>
+    <a class="footer-btn kofi"    href="https://ko-fi.com/neumangames"     target="_blank" rel="noopener noreferrer">☕ Ko-fi</a>
+    <a class="footer-btn patreon" href="https://patreon.com/NeumanGames"   target="_blank" rel="noopener noreferrer">🎁 Patreon</a>
+  </div>
+  <div class="footer-copy">
+    &copy; 2025 NeumanGames™ · Free to play, always. ·
+    <a href="https://github.com/NeumanGames/puzzle-game" target="_blank" rel="noopener noreferrer">GitHub</a>
+    · Images via <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer">Unsplash</a>
+  </div>
+</footer>
+
+<script>
+'use strict';
+// ══════════════════════════════════════════════════════════════
+//  CONFIG & CONSTANTS
+// ══════════════════════════════════════════════════════════════
+const UNSPLASH_KEY = '6bofrVa81GYXijWX8L6BX9CYP3EeU_ddCrB-SDjlTks'; // Unsplash Access Key
+
+const SNAP_THRESHOLD = 0.38; // fraction of piece size
+const TAB_SIZE       = 0.32; // fraction of piece size (jigsaw tab height)
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 3.0;
+const ZOOM_STEP = 0.2;
+
+// Built-in image categories with curated Unsplash source images (royalty-free)
+// credit: { name, profileUrl } — used for Unsplash attribution requirement
+const BUILTIN_CATS = [
+  { id:'cartoon',   emoji:'🎨', name:'Cartoon',    imgs:[
+    { url:'https://images.unsplash.com/photo-1518791841217-8f162f1912da?w=600', name:'Playful Kitten',    credit:{ name:'Manja Vitolic',    profileUrl:'https://unsplash.com/@madhatterzone?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1607083206968-13611e3d76db?w=600', name:'Rainbow Cake',      credit:{ name:'Alexander Grey',   profileUrl:'https://unsplash.com/@sharonmccutcheon?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1563396983906-b3795482a59a?w=600', name:'Colorful Balloons', credit:{ name:'Erin Minuskin',     profileUrl:'https://unsplash.com/@erinminuskin?utm_source=NeumanGames&utm_medium=referral' } },
+  ]},
+  { id:'animals',   emoji:'🐾', name:'Animals',    imgs:[
+    { url:'https://images.unsplash.com/photo-1474511320723-9a56873867b5?w=600', name:'Fox in Snow',       credit:{ name:'Ray Hennessy',      profileUrl:'https://unsplash.com/@rayhennessy?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1583511655826-05700d52f4d9?w=600', name:'Golden Retriever',  credit:{ name:'Berkay Gumustekin', profileUrl:'https://unsplash.com/@berkaygumustekin?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=600', name:'Tropical Parrot',   credit:{ name:'Stephanie LeBlanc', profileUrl:'https://unsplash.com/@sleblanc01?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600', name:'Sea Turtle',        credit:{ name:'Tanguy Sauvin',     profileUrl:'https://unsplash.com/@tanguysauvin?utm_source=NeumanGames&utm_medium=referral' } },
+  ]},
+  { id:'nature',    emoji:'🌿', name:'Nature',     imgs:[
+    { url:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600', name:'Mountain Lake',     credit:{ name:'Sven Scheuermeier', profileUrl:'https://unsplash.com/@sveninho?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?w=600', name:'Waterfall',         credit:{ name:'Luca Bravo',        profileUrl:'https://unsplash.com/@lucabravo?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1499002238440-d264edd596ec?w=600', name:'Autumn Forest',     credit:{ name:'Felix Mittermeier', profileUrl:'https://unsplash.com/@felixmittermeier?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1462275646964-a0e3386b89fa?w=600', name:'Wildflowers',       credit:{ name:'Aaron Burden',      profileUrl:'https://unsplash.com/@aaronburden?utm_source=NeumanGames&utm_medium=referral' } },
+  ]},
+  { id:'space',     emoji:'🚀', name:'Space',      imgs:[
+    { url:'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=600', name:'Milky Way',         credit:{ name:'Jeremy Thomas',     profileUrl:'https://unsplash.com/@jeremythomasphoto?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?w=600', name:'Moon Surface',      credit:{ name:'NASA',              profileUrl:'https://unsplash.com/@nasa?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=600', name:'Nebula',            credit:{ name:'Aldebaran S',       profileUrl:'https://unsplash.com/@aldebarans?utm_source=NeumanGames&utm_medium=referral' } },
+  ]},
+  { id:'landmarks', emoji:'🗺️', name:'Landmarks',  imgs:[
+    { url:'https://images.unsplash.com/photo-1500039436846-25ae2f11882e?w=600', name:'Eiffel Tower',      credit:{ name:'Denys Nevozhai',    profileUrl:'https://unsplash.com/@dnevozhai?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=600', name:'Taj Mahal',         credit:{ name:'Sylwia Bartyzel',   profileUrl:'https://unsplash.com/@sylwiabartyzel?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=600', name:'Northern Lights',   credit:{ name:'Lightscape',        profileUrl:'https://unsplash.com/@lightscape?utm_source=NeumanGames&utm_medium=referral' } },
+  ]},
+  { id:'food',      emoji:'🍕', name:'Food',       imgs:[
+    { url:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600', name:'Pizza',             credit:{ name:'Zara Walker',       profileUrl:'https://unsplash.com/@zarawlkr?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=600', name:'Ice Cream',         credit:{ name:'American Heritage', profileUrl:'https://unsplash.com/@americanheritagechocolate?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600', name:'Donuts',            credit:{ name:'Kobby Mendez',      profileUrl:'https://unsplash.com/@kobbymendez?utm_source=NeumanGames&utm_medium=referral' } },
+  ]},
+];
+
+const UNSPLASH_CATS = ['animals','nature','space','food','architecture','travel','abstract','flowers','ocean','mountains'];
+
+// ══════════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════════
+let cfg = {
+  mode: 'jigsaw',
+  cols: 3,
+  tray: 'all',
+  adv:  { rotation:false, nostraight:false, timer:false, ghost:false },
+  image: null, // { url, name, src, credit }
+};
+
+let game = {
+  pieces: [],         // jigsaw piece objects
+  groups: [],         // groups of snapped pieces
+  solved: 0,          // pieces in correct final position
+  moves: 0,           // slider moves OR jigsaw piece drops
+  timerSecs: 0,
+  timerInterval: null,
+  zoom: 1,
+  panX: 0, panY: 0,
+  boardX: 0, boardY: 0, // board position in world
+  boardW: 0, boardH: 0,
+  pieceW: 0, pieceH: 0,
+  img: null,          // HTMLImageElement
+  sliderTiles: [],    // for slider mode
+  sliderEmpty: 0,
+  draggingPiece: null,
+  dragOffX: 0, dragOffY: 0,
+  isPanning: false,
+  panStartX: 0, panStartY: 0,
+  panStartPX: 0, panStartPY: 0,
+  ghostVisible: false,
+  pieceScale: 1.0,    // S=0.72, M=1.0, L=1.32
+  _pszLabel: 'M',     // tracks active label for sync
+};
+
+// ══════════════════════════════════════════════════════════════
+//  SETUP SCREEN LOGIC
+// ══════════════════════════════════════════════════════════════
+
+// -- Mode pills
+document.querySelectorAll('#mode-pills .pill').forEach(p => {
+  p.onclick = () => {
+    document.querySelectorAll('#mode-pills .pill').forEach(x => x.classList.remove('selected'));
+    p.classList.add('selected');
+    cfg.mode = p.dataset.mode;
+    document.getElementById('tray-section').style.display = cfg.mode === 'jigsaw' ? '' : 'none';
+    document.getElementById('adv-section').style.display  = cfg.mode === 'jigsaw' ? '' : 'none';
+  };
+});
+
+// -- Size pills
+document.querySelectorAll('#sz-pills .pill').forEach(p => {
+  p.onclick = () => {
+    document.querySelectorAll('#sz-pills .pill').forEach(x => x.classList.remove('selected'));
+    p.classList.add('selected');
+    cfg.cols = +p.dataset.sz;
+  };
+});
+
+// -- Tray pills
+document.querySelectorAll('#tray-pills .pill').forEach(p => {
+  p.onclick = () => {
+    document.querySelectorAll('#tray-pills .pill').forEach(x => x.classList.remove('selected'));
+    p.classList.add('selected');
+    cfg.tray = p.dataset.tray;
+  };
+});
+
+// -- Advanced pills (toggle)
+document.querySelectorAll('#adv-pills .pill').forEach(p => {
+  p.onclick = () => {
+    p.classList.toggle('selected');
+    cfg.adv[p.dataset.adv] = p.classList.contains('selected');
+  };
+});
+
+// -- Image tabs
+document.querySelectorAll('.img-tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.img-tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.img-tab-panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'saved') renderSavedTab();
+  };
+});
+
+// -- Built-in categories
+(function buildBuiltinUI() {
+  const catGrid = document.getElementById('builtin-cats');
+  const imgGrid = document.getElementById('builtin-imgs');
+  let activeCat = BUILTIN_CATS[0];
+
+  function showCat(cat) {
+    activeCat = cat;
+    document.querySelectorAll('.img-cat-card').forEach(c => c.classList.toggle('selected', c.dataset.catId === cat.id));
+    imgGrid.innerHTML = '';
+    cat.imgs.forEach(img => {
+      const thumb = document.createElement('div');
+      thumb.className = 'img-thumb';
+      thumb.innerHTML = `<img src="${img.url}" alt="${img.name}" loading="lazy">`;
+      thumb.onclick = () => selectImage({ url: img.url, name: img.name, src: 'Unsplash', credit: img.credit || null });
+      imgGrid.appendChild(thumb);
+    });
+  }
+
+  BUILTIN_CATS.forEach(cat => {
+    const card = document.createElement('div');
+    card.className = 'img-cat-card';
+    card.dataset.catId = cat.id;
+    card.innerHTML = `<div class="img-cat-emoji">${cat.emoji}</div><div class="img-cat-name">${cat.name}</div>`;
+    card.onclick = () => showCat(cat);
+    catGrid.appendChild(card);
+  });
+
+  showCat(activeCat);
+})();
+
+// -- Unsplash category pills
+(function buildUnsplashCats() {
+  const container = document.getElementById('unsplash-cat-pills');
+  UNSPLASH_CATS.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'pill';
+    btn.style.fontSize = '.8rem'; btn.style.padding = '6px 12px';
+    btn.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+    btn.onclick = () => {
+      document.getElementById('unsplash-search-input').value = cat;
+      doUnsplashSearch(cat);
+    };
+    container.appendChild(btn);
+  });
+})();
+
+document.getElementById('unsplash-search-btn').onclick = () => {
+  const q = document.getElementById('unsplash-search-input').value.trim();
+  if (q) doUnsplashSearch(q);
+};
+document.getElementById('unsplash-search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const q = e.target.value.trim();
+    if (q) doUnsplashSearch(q);
+  }
+});
+
+async function doUnsplashSearch(query) {
+  if (UNSPLASH_KEY === 'YOUR_UNSPLASH_KEY') {
+    document.getElementById('unsplash-results').innerHTML =
+      `<div style="text-align:center;padding:20px;color:#aaa;font-family:var(--font-display)">
+        🔑 Add your Unsplash API key to enable web image search.<br>
+        <small style="font-family:var(--font-body);font-size:.8rem">Open index.html and set UNSPLASH_KEY at the top of the script.</small>
+      </div>`;
+    return;
+  }
+  const resultsDiv = document.getElementById('unsplash-results');
+  resultsDiv.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div></div>`;
+  try {
+    const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=20&orientation=landscape`, {
+      headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` }
+    });
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) {
+      resultsDiv.innerHTML = `<p style="color:#aaa;font-size:.9rem;font-weight:700">No results found. Try a different search!</p>`;
+      return;
+    }
+    resultsDiv.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'img-grid';
+    data.results.forEach(photo => {
+      const thumb = document.createElement('div');
+      thumb.className = 'img-thumb';
+      thumb.innerHTML = `<img src="${photo.urls.small}" alt="${photo.alt_description || 'Photo'}" loading="lazy">`;
+      thumb.onclick = () => {
+        selectImage({
+          url: photo.urls.regular,
+          name: photo.alt_description || query,
+          src: 'Unsplash',
+          credit: { name: photo.user.name, link: photo.user.links.html + '?utm_source=NeumanGames&utm_medium=referral' }
+        });
+        // Trigger Unsplash download as required by API guidelines
+        fetch(photo.links.download_location, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } });
+      };
+      grid.appendChild(thumb);
+    });
+    resultsDiv.appendChild(grid);
+    document.getElementById('unsplash-credit').innerHTML =
+      `Photos by <a href="https://unsplash.com?utm_source=NeumanGames&utm_medium=referral" target="_blank">Unsplash</a>`;
+  } catch(e) {
+    resultsDiv.innerHTML = `<p style="color:var(--red);font-size:.9rem;font-weight:700">Search failed. Check your API key and internet connection.</p>`;
+  }
+}
+
+// -- Upload
+document.getElementById('upload-zone').onclick = () => document.getElementById('upload-input').click();
+document.getElementById('upload-input').onchange = function() {
+  const file = this.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  selectImage({ url, name: file.name.replace(/\.[^.]+$/,''), src: 'Uploaded Photo', credit: null, isBlob: true });
+  document.getElementById('upload-zone').classList.add('has-image');
+  document.getElementById('upload-zone').textContent = `✅ ${file.name}`;
+};
+
+// -- Drag-over on upload zone
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--blue)'; });
+uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.style.borderColor = '';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    const url = URL.createObjectURL(file);
+    selectImage({ url, name: file.name.replace(/\.[^.]+$/,''), src: 'Uploaded Photo', credit: null, isBlob: true });
+    uploadZone.classList.add('has-image');
+    uploadZone.textContent = `✅ ${file.name}`;
+  }
+});
+
+// -- Image selection
+function selectImage(imgObj) {
+  cfg.image = imgObj;
+  const preview = document.getElementById('selected-preview');
+  preview.style.display = '';
+  document.getElementById('selected-preview-img').src = imgObj.url;
+  document.getElementById('selected-preview-name').textContent = imgObj.name;
+  const srcEl = document.getElementById('selected-preview-src');
+  if (imgObj.credit && imgObj.credit.profileUrl) {
+    srcEl.innerHTML = `Photo by <a href="${imgObj.credit.profileUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:none;font-weight:800">${imgObj.credit.name}</a> on <a href="https://unsplash.com?utm_source=NeumanGames&utm_medium=referral" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:none;font-weight:800">Unsplash</a>`;
+  } else if (imgObj.credit && imgObj.credit.link) {
+    srcEl.innerHTML = `Photo by <a href="${imgObj.credit.link}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:none;font-weight:800">${imgObj.credit.name}</a> on <a href="https://unsplash.com?utm_source=NeumanGames&utm_medium=referral" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:none;font-weight:800">Unsplash</a>`;
+  } else {
+    srcEl.textContent = imgObj.src;
+  }
+  document.getElementById('start-btn').disabled = false;
+
+  // Mark selected thumb
+  document.querySelectorAll('.img-thumb').forEach(t => t.classList.remove('selected'));
+  document.querySelectorAll('.saved-img-item').forEach(t => t.classList.remove('selected'));
+  // find matching thumb
+  event && event.currentTarget && event.currentTarget.classList && event.currentTarget.classList.add('selected');
+}
+
+// -- Save image
+document.getElementById('save-img-btn').onclick = () => {
+  if (!cfg.image) return;
+  const saved = getSavedImages();
+  if (saved.find(s => s.url === cfg.image.url)) { alert('Already saved!'); return; }
+  saved.push({ url: cfg.image.url, name: cfg.image.name, src: cfg.image.src });
+  localStorage.setItem('ng_puzzle_saved', JSON.stringify(saved.slice(-20)));
+  const btn = document.getElementById('save-img-btn');
+  btn.textContent = '✅ Saved!';
+  setTimeout(() => btn.textContent = '💾 Save', 1500);
+};
+
+function getSavedImages() {
+  try { return JSON.parse(localStorage.getItem('ng_puzzle_saved') || '[]'); } catch { return []; }
+}
+
+function renderSavedTab() {
+  const container = document.getElementById('saved-imgs-container');
+  const saved = getSavedImages();
+  if (!saved.length) {
+    container.innerHTML = `<p style="color:#aaa;font-size:.9rem;font-weight:700;margin-bottom:8px">No saved images yet — use the 💾 button to save your favorites!</p>`;
+    return;
+  }
+  container.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'saved-imgs-list';
+  saved.forEach((img, i) => {
+    const item = document.createElement('div');
+    item.className = 'saved-img-item';
+    item.innerHTML = `<img src="${img.url}" alt="${img.name}" loading="lazy"><button class="saved-img-del" title="Delete">✕</button>`;
+    item.querySelector('img').onclick = () => selectImage({ url: img.url, name: img.name, src: img.src, credit: null });
+    item.querySelector('.saved-img-del').onclick = e => {
+      e.stopPropagation();
+      const arr = getSavedImages(); arr.splice(i, 1);
+      localStorage.setItem('ng_puzzle_saved', JSON.stringify(arr));
+      renderSavedTab();
+    };
+    grid.appendChild(item);
+  });
+  container.appendChild(grid);
+}
+
+// -- Modals
+document.getElementById('setup-help-btn').onclick  = () => openModal('setup-help-modal');
+document.getElementById('setup-help-close').onclick = () => closeModal('setup-help-modal');
+
+// -- Start button
+document.getElementById('start-btn').onclick = () => {
+  if (!cfg.image) return;
+  startGame();
+};
+
+// ══════════════════════════════════════════════════════════════
+//  GAME START
+// ══════════════════════════════════════════════════════════════
+function startGame() {
+  showScreen('game-screen');
+  // Reset game state
+  game.pieces = []; game.groups = []; game.solved = 0; game.moves = 0;
+  game.timerSecs = 0; clearInterval(game.timerInterval);
+  game.zoom = 1; game.panX = 0; game.panY = 0;
+  game.draggingPiece = null; game.ghostVisible = cfg.adv.ghost;
+
+  // Sync size toggle to current pieceScale (keep user's choice across restarts)
+  document.querySelectorAll('.sz-btn').forEach(b => b.classList.toggle('active', b.dataset.psz === game._pszLabel));
+
+  // Update ghost btn label
+  document.getElementById('menu-ghost').textContent = (game.ghostVisible ? '👻 Hide' : '👻 Show') + ' Ghost Image';
+
+  // In-game Unsplash attribution
+  const attrEl = document.getElementById('ingame-attribution');
+  const cred = cfg.image.credit;
+  if (cred) {
+    const profileUrl = cred.profileUrl || cred.link || '#';
+    attrEl.innerHTML = `Photo by <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:none;font-weight:800">${cred.name}</a> on <a href="https://unsplash.com?utm_source=NeumanGames&utm_medium=referral" target="_blank" rel="noopener noreferrer" style="color:var(--blue);text-decoration:none;font-weight:800">Unsplash</a>`;
+    attrEl.style.display = '';
+  } else {
+    attrEl.style.display = 'none';
+  }
+
+  // Show/hide timer
+  const timerChip = document.getElementById('stat-timer-chip');
+  timerChip.style.display = cfg.adv.timer ? '' : 'none';
+
+  // Update help body based on mode
+  updateHelpBody();
+
+  // Load image then build puzzle
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    game.img = img;
+    if (cfg.mode === 'slider') buildSlider();
+    else                       buildJigsaw();
+    if (cfg.adv.timer) startTimer();
+  };
+  img.onerror = () => {
+    // Try without crossOrigin for blob URLs
+    const img2 = new Image();
+    img2.onload = () => { game.img = img2; if (cfg.mode === 'slider') buildSlider(); else buildJigsaw(); };
+    img2.src = cfg.image.url;
+  };
+  img.src = cfg.image.url;
+}
+
+function updateHelpBody() {
+  const body = document.getElementById('gameplay-help-body');
+  if (cfg.mode === 'slider') {
+    body.innerHTML = `<ul>
+      <li><span class="mi">👆</span><span><strong>Tap a tile</strong> next to the empty space to slide it in.</span></li>
+      <li><span class="mi">⌨️</span><span><strong>Arrow keys</strong> also work on keyboard.</span></li>
+      <li><span class="mi">🔢</span><span><strong>Move counter</strong> tracks every slide — try to beat your best!</span></li>
+      <li><span class="mi">🖼️</span><span><strong>Preview</strong> the full image anytime with the 👁️ button.</span></li>
+      <li><span class="mi">📐</span><span><strong>Tile size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize tiles (keeps your progress).</span></li>
+      <li><span class="mi">🏆</span><span><strong>Restore the picture</strong> to win. Empty space always ends in the bottom-right.</span></li>
+    </ul>`;
+  } else {
+    body.innerHTML = `<ul>
+      <li><span class="mi">✋</span><span><strong>Drag pieces</strong> from the tray onto the board.</span></li>
+      <li><span class="mi">🔗</span><span><strong>Snap!</strong> — drop a piece near its neighbor and it will lock in place.</span></li>
+      <li><span class="mi">🤝</span><span><strong>Groups move together</strong> — once snapped, drag the whole group at once.</span></li>
+      ${cfg.adv.rotation ? '<li><span class="mi">🔄</span><span><strong>Right-click / two-finger tap</strong> to rotate a piece 90°.</span></li>' : ''}
+      <li><span class="mi">📐</span><span><strong>Piece size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize pieces anytime.</span></li>
+      <li><span class="mi">🔍</span><span><strong>Zoom</strong> with ➕/➖ or pinch (mobile) / scroll wheel (desktop).</span></li>
+      <li><span class="mi">✊</span><span><strong>Pan</strong> by dragging the background.</span></li>
+      <li><span class="mi">👁️</span><span><strong>Preview</strong> the full image anytime with the 👁️ button.</span></li>
+    </ul>`;
+  }
+}
+
+function startTimer() {
+  game.timerSecs = 0;
+  updateTimerDisplay();
+  game.timerInterval = setInterval(() => {
+    game.timerSecs++;
+    updateTimerDisplay();
+  }, 1000);
+}
+function updateTimerDisplay() {
+  const m = Math.floor(game.timerSecs / 60);
+  const s = game.timerSecs % 60;
+  document.getElementById('stat-timer-val').textContent = m + ':' + String(s).padStart(2,'0');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SLIDER PUZZLE
+// ══════════════════════════════════════════════════════════════
+function buildSlider() {
+  const board  = document.getElementById('slider-board');
+  const vp     = document.getElementById('puzzle-viewport');
+  vp.style.display   = 'none';
+  board.style.display = 'grid';
+  document.getElementById('slider-best').style.display = '';
+  document.getElementById('stat-moves-chip').style.display = '';
+
+  const N = cfg.cols;
+  const total = N * N;
+  const basePx = Math.min(window.innerWidth - 32, window.innerHeight * 0.72, 700);
+  const maxBoardPx = Math.round(basePx * game.pieceScale);
+  const tileSize = Math.floor(maxBoardPx / N);
+  const boardPx  = tileSize * N;
+
+  board.style.gridTemplateColumns = `repeat(${N}, ${tileSize}px)`;
+  board.style.width  = boardPx + 'px';
+  board.style.height = boardPx + 'px';
+
+  // Shuffle tiles ensuring solvability
+  let tiles = Array.from({length: total}, (_, i) => i); // 0 = empty
+  do { shuffleArray(tiles); } while (!isSliderSolvable(tiles, N));
+  game.sliderTiles = tiles;
+  game.sliderEmpty = tiles.indexOf(0);
+
+  board.innerHTML = '';
+  game.img.setAttribute('crossOrigin','anonymous');
+
+  tiles.forEach((tileIdx, pos) => {
+    const cell = document.createElement('div');
+    cell.className = 'slider-tile' + (tileIdx === 0 ? ' empty' : '');
+    cell.style.width = tileSize + 'px';
+    cell.style.height = tileSize + 'px';
+    cell.dataset.pos = pos;
+
+    if (tileIdx !== 0) {
+      const canvas = document.createElement('canvas');
+      canvas.width  = tileSize;
+      canvas.height = tileSize;
+      const ctx = canvas.getContext('2d');
+      const row = Math.floor((tileIdx - 1) / N);
+      const col = (tileIdx - 1) % N;
+      ctx.drawImage(game.img, col * (game.img.width / N), row * (game.img.height / N),
+        game.img.width / N, game.img.height / N, 0, 0, tileSize, tileSize);
+      cell.appendChild(canvas);
+    }
+    cell.onclick = () => sliderTileClick(pos);
+    board.appendChild(cell);
+  });
+
+  // Show best score
+  const bestKey = `ng_slider_best_${N}`;
+  const best = localStorage.getItem(bestKey);
+  document.getElementById('slider-best-val').textContent = best ? best + ' moves' : '—';
+  updateGameStats();
+}
+
+function sliderTileClick(pos) {
+  const N = cfg.cols;
+  const empty = game.sliderEmpty;
+  const dr = Math.abs(Math.floor(pos/N) - Math.floor(empty/N));
+  const dc = Math.abs((pos%N) - (empty%N));
+  if (!((dr === 1 && dc === 0) || (dr === 0 && dc === 1))) return;
+
+  // Swap
+  [game.sliderTiles[pos], game.sliderTiles[empty]] = [game.sliderTiles[empty], game.sliderTiles[pos]];
+  game.sliderEmpty = pos;
+  game.moves++;
+
+  // Re-render
+  buildSliderFromState();
+  updateGameStats();
+
+  if (isSliderSolved()) {
+    setTimeout(handleWin, 300);
+  }
+}
+
+function buildSliderFromState() {
+  const board = document.getElementById('slider-board');
+  const N = cfg.cols;
+  const tiles = game.sliderTiles;
+  // Recalculate from current pieceScale (same formula as buildSlider)
+  const basePx   = Math.min(window.innerWidth - 32, window.innerHeight * 0.72, 700);
+  const tileSize = Math.floor(Math.round(basePx * game.pieceScale) / N);
+
+  board.style.gridTemplateColumns = `repeat(${N}, ${tileSize}px)`;
+  board.style.width  = (tileSize * N) + 'px';
+  board.style.height = (tileSize * N) + 'px';
+  board.innerHTML = '';
+  tiles.forEach((tileIdx, pos) => {
+    const cell = document.createElement('div');
+    cell.className = 'slider-tile' + (tileIdx === 0 ? ' empty' : '');
+    cell.style.width = tileSize + 'px';
+    cell.style.height = tileSize + 'px';
+    cell.dataset.pos = pos;
+
+    if (tileIdx !== 0) {
+      const canvas = document.createElement('canvas');
+      canvas.width  = tileSize;
+      canvas.height = tileSize;
+      const ctx = canvas.getContext('2d');
+      const row = Math.floor((tileIdx - 1) / N);
+      const col = (tileIdx - 1) % N;
+      ctx.drawImage(game.img, col * (game.img.width / N), row * (game.img.height / N),
+        game.img.width / N, game.img.height / N, 0, 0, tileSize, tileSize);
+      cell.appendChild(canvas);
+    }
+    cell.onclick = () => sliderTileClick(pos);
+    board.appendChild(cell);
+  });
+}
+
+// Keyboard support for slider
+document.addEventListener('keydown', e => {
+  if (document.getElementById('game-screen').classList.contains('hidden')) return;
+  if (cfg.mode !== 'slider') return;
+  const N = cfg.cols;
+  const empty = game.sliderEmpty;
+  const er = Math.floor(empty / N), ec = empty % N;
+  let target = -1;
+  if (e.key === 'ArrowUp'    && er < N-1) target = (er+1)*N + ec;
+  if (e.key === 'ArrowDown'  && er > 0)   target = (er-1)*N + ec;
+  if (e.key === 'ArrowLeft'  && ec < N-1) target = er*N + (ec+1);
+  if (e.key === 'ArrowRight' && ec > 0)   target = er*N + (ec-1);
+  if (target >= 0) { e.preventDefault(); sliderTileClick(target); }
+});
+
+function isSliderSolved() {
+  for (let i = 0; i < game.sliderTiles.length - 1; i++) {
+    if (game.sliderTiles[i] !== i + 1) return false;
+  }
+  return game.sliderTiles[game.sliderTiles.length - 1] === 0;
+}
+
+function isSliderSolvable(tiles, N) {
+  // Count inversions; for even N also account for row of blank
+  let inv = 0;
+  const arr = tiles.filter(x => x !== 0);
+  for (let i = 0; i < arr.length; i++)
+    for (let j = i+1; j < arr.length; j++)
+      if (arr[i] > arr[j]) inv++;
+  if (N % 2 === 1) return inv % 2 === 0;
+  const blankRow = Math.floor(tiles.indexOf(0) / N);
+  const blankFromBottom = N - blankRow;
+  return (blankFromBottom % 2 === 1) ? (inv % 2 === 0) : (inv % 2 === 1);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  JIGSAW PUZZLE
+// ══════════════════════════════════════════════════════════════
+function buildJigsaw() {
+  const board   = document.getElementById('slider-board');
+  const vp      = document.getElementById('puzzle-viewport');
+  board.style.display = 'none';
+  vp.style.display    = '';
+  document.getElementById('slider-best').style.display = 'none';
+  document.getElementById('stat-moves-chip').style.display = '';
+
+  const N = cfg.cols;
+  const vpW = vp.clientWidth  || window.innerWidth - 24;
+  const vpH = Math.min(window.innerHeight * 0.72, 700);
+  vp.style.height = vpH + 'px';
+
+  // Board occupies center ~55% of viewport, scaled by pieceScale
+  const boardFrac = cfg.tray === 'all' ? 0.56 : (cfg.tray === 'left' || cfg.tray === 'right' ? 0.64 : 0.72);
+  const boardW = Math.floor(Math.min(vpW * boardFrac, vpH * boardFrac) * game.pieceScale);
+  const boardH = boardW; // square for simplicity
+  game.boardW  = boardW;
+  game.boardH  = boardH;
+  game.pieceW  = boardW / N;
+  game.pieceH  = boardH / N;
+
+  // Position board in world center
+  const worldW = vpW * 2.2, worldH = vpH * 2.2;
+  game.boardX = (worldW - boardW) / 2;
+  game.boardY = (worldH - boardH) / 2;
+
+  // Size world
+  const world = document.getElementById('puzzle-world');
+  world.style.width  = worldW + 'px';
+  world.style.height = worldH + 'px';
+
+  // Position board
+  const boardEl = document.getElementById('board-area');
+  boardEl.style.left   = game.boardX + 'px';
+  boardEl.style.top    = game.boardY + 'px';
+  boardEl.style.width  = boardW + 'px';
+  boardEl.style.height = boardH + 'px';
+
+  // Ghost image
+  const ghost = document.getElementById('board-ghost');
+  ghost.style.backgroundImage = `url('${cfg.image.url}')`;
+  ghost.classList.toggle('visible', game.ghostVisible);
+
+  // Remove old pieces
+  document.querySelectorAll('.piece').forEach(p => p.remove());
+  game.pieces = []; game.groups = []; game.solved = 0;
+
+  // Generate tab directions for each edge
+  // tabs[r][c] = { right: ±1, bottom: ±1 }  (1=tab out, -1=tab in, 0=straight)
+  const tabs = generateTabs(N);
+
+  // Build pieces
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const piece = createPiece(r, c, N, tabs);
+      game.pieces.push(piece);
+    }
+  }
+
+  // Pan to center board on screen
+  game.panX = (vpW - boardW) / 2 - game.boardX * game.zoom + (vpW - vpW * game.zoom) / 2;
+  game.panY = (vpH - boardH) / 2 - game.boardY * game.zoom;
+  // Simpler: just center the world so board is visible
+  game.panX = -(worldW * game.zoom - vpW) / 2;
+  game.panY = -(worldH * game.zoom - vpH) / 2;
+  applyTransform();
+
+  // Scatter pieces to tray positions
+  scatterPieces();
+
+  updateGameStats();
+  setupJigsawInteraction();
+}
+
+function generateTabs(N) {
+  const tabs = [];
+  for (let r = 0; r < N; r++) {
+    tabs[r] = [];
+    for (let c = 0; c < N; c++) {
+      tabs[r][c] = {
+        right:  c < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight && c === N-1 ? (Math.random()>.5?1:-1) : 0),
+        bottom: r < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight && r === N-1 ? (Math.random()>.5?1:-1) : 0),
+      };
+    }
+  }
+  // Ensure neighbour edges are complementary
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (c < N-1) tabs[r][c+1].left = -tabs[r][c].right;
+      if (r < N-1) tabs[r+1][c].top  = -tabs[r][c].bottom;
+    }
+  }
+  // Fill border edges
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (tabs[r][c].left  === undefined) tabs[r][c].left  = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
+      if (tabs[r][c].top   === undefined) tabs[r][c].top   = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
+      if (tabs[r][c].right === undefined) tabs[r][c].right  = 0;
+      if (tabs[r][c].bottom=== undefined) tabs[r][c].bottom = 0;
+    }
+  }
+  return tabs;
+}
+
+function createPiece(r, c, N, tabs) {
+  const pw  = game.pieceW;
+  const ph  = game.pieceH;
+  const tab = TAB_SIZE;
+  const margin = Math.ceil(pw * tab) + 2; // extra canvas margin for tabs
+  const cw  = pw + margin * 2;
+  const ch  = ph + margin * 2;
+
+  const el  = document.createElement('div');
+  el.className = 'piece';
+  el.style.width  = cw + 'px';
+  el.style.height = ch + 'px';
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+
+  // Build clip path
+  const t = tabs[r][c];
+  buildPiecePath(ctx, pw, ph, margin, t, tab);
+  ctx.save();
+  ctx.clip();
+
+  // Draw image slice (with margin offset)
+  const srcX = c * (game.img.width  / N);
+  const srcY = r * (game.img.height / N);
+  const srcW = game.img.width  / N;
+  const srcH = game.img.height / N;
+  ctx.drawImage(game.img, srcX, srcY, srcW, srcH, margin, margin, pw, ph);
+  ctx.restore();
+
+  // Draw outline
+  buildPiecePath(ctx, pw, ph, margin, t, tab);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  el.appendChild(canvas);
+  document.getElementById('puzzle-world').appendChild(el);
+
+  const pieceObj = {
+    el, r, c,
+    // current position in world coords (top-left of canvas)
+    x: game.boardX + c * pw - margin,
+    y: game.boardY + r * ph - margin,
+    rotation: cfg.adv.rotation ? [0, 90, 180, 270][Math.floor(Math.random()*4)] : 0,
+    snapped: false,
+    groupId: null,
+    margin,
+    cw, ch,
+  };
+  el.style.left = pieceObj.x + 'px';
+  el.style.top  = pieceObj.y + 'px';
+  if (pieceObj.rotation) {
+    el.style.transform = `rotate(${pieceObj.rotation}deg)`;
+  }
+  el.dataset.r = r;
+  el.dataset.c = c;
+  return pieceObj;
+}
+
+function buildPiecePath(ctx, pw, ph, margin, t, tabFrac) {
+  const ts = pw * tabFrac; // tab size in px
+  const mx = margin, my = margin;
+
+  ctx.beginPath();
+  // Top edge
+  ctx.moveTo(mx, my);
+  if (t.top !== 0) {
+    const mid = mx + pw / 2;
+    const bx  = ts * 0.45;
+    const by  = ts * t.top;
+    ctx.bezierCurveTo(mid - bx, my + by * 0.1, mid - bx * 1.2, my + by, mid, my + by);
+    ctx.bezierCurveTo(mid + bx * 1.2, my + by, mid + bx, my + by * 0.1, mx + pw, my);
+  } else {
+    ctx.lineTo(mx + pw, my);
+  }
+  // Right edge
+  if (t.right !== 0) {
+    const mid = my + ph / 2;
+    const bx  = ts * t.right;
+    const by  = ts * 0.45;
+    ctx.bezierCurveTo(mx+pw + bx*0.1, mid - by, mx+pw + bx, mid - by*1.2, mx+pw + bx, mid);
+    ctx.bezierCurveTo(mx+pw + bx, mid + by*1.2, mx+pw + bx*0.1, mid + by, mx+pw, my+ph);
+  } else {
+    ctx.lineTo(mx + pw, my + ph);
+  }
+  // Bottom edge (right to left)
+  if (t.bottom !== 0) {
+    const mid = mx + pw / 2;
+    const bx  = ts * 0.45;
+    const by  = ts * t.bottom;
+    ctx.bezierCurveTo(mx+pw - bx, my+ph + by*0.1, mid + bx*1.2, my+ph + by, mid, my+ph + by);
+    ctx.bezierCurveTo(mid - bx*1.2, my+ph + by, mx + bx, my+ph + by*0.1, mx, my+ph);
+  } else {
+    ctx.lineTo(mx, my + ph);
+  }
+  // Left edge (bottom to top)
+  if (t.left !== 0) {
+    const mid = my + ph / 2;
+    const bx  = ts * t.left;
+    const by  = ts * 0.45;
+    ctx.bezierCurveTo(mx + bx*0.1, mid + by, mx + bx, mid + by*1.2, mx + bx, mid);
+    ctx.bezierCurveTo(mx + bx, mid - by*1.2, mx + bx*0.1, mid - by, mx, my);
+  } else {
+    ctx.lineTo(mx, my);
+  }
+  ctx.closePath();
+}
+
+function scatterPieces() {
+  const N = cfg.cols;
+  const worldW = parseFloat(document.getElementById('puzzle-world').style.width);
+  const worldH = parseFloat(document.getElementById('puzzle-world').style.height);
+  const bx = game.boardX, by = game.boardY;
+  const bw = game.boardW, bh = game.boardH;
+  const tray = cfg.tray;
+
+  game.pieces.forEach((p, i) => {
+    let tx, ty;
+    const margin = bw * 0.04;
+    const pw = game.pieceW + p.margin * 2;
+    const ph = game.pieceH + p.margin * 2;
+
+    if (tray === 'top' || (tray === 'all' && i % 4 === 0)) {
+      tx = bx + Math.random() * Math.max(1, bw - pw);
+      ty = by - ph - margin - Math.random() * (by * 0.5);
+    } else if (tray === 'bottom' || (tray === 'all' && i % 4 === 1)) {
+      tx = bx + Math.random() * Math.max(1, bw - pw);
+      ty = by + bh + margin + Math.random() * (worldH - by - bh - ph - margin * 2);
+    } else if (tray === 'left' || (tray === 'all' && i % 4 === 2)) {
+      tx = bx - pw - margin - Math.random() * (bx * 0.5);
+      ty = by + Math.random() * Math.max(1, bh - ph);
+    } else { // right
+      tx = bx + bw + margin + Math.random() * (worldW - bx - bw - pw - margin * 2);
+      ty = by + Math.random() * Math.max(1, bh - ph);
+    }
+
+    // Clamp to world bounds
+    tx = Math.max(4, Math.min(worldW - pw - 4, tx));
+    ty = Math.max(4, Math.min(worldH - ph - 4, ty));
+
+    p.x = tx; p.y = ty;
+    p.el.style.left = tx + 'px';
+    p.el.style.top  = ty + 'px';
+    p.el.style.zIndex = i + 10;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  JIGSAW INTERACTION (drag, snap, pan, zoom)
+// ══════════════════════════════════════════════════════════════
+function setupJigsawInteraction() {
+  const vp    = document.getElementById('puzzle-viewport');
+  const world = document.getElementById('puzzle-world');
+
+  // Remove old listeners by cloning
+  const newVP = vp.cloneNode(false);
+  while (vp.firstChild) newVP.appendChild(vp.firstChild);
+  vp.parentNode.replaceChild(newVP, vp);
+  const vpEl = document.getElementById('puzzle-viewport');
+
+  // ---- Pointer events on pieces ----
+  document.querySelectorAll('.piece').forEach((el, i) => {
+    el.addEventListener('pointerdown', onPiecePointerDown, { passive: false });
+    el.addEventListener('contextmenu', onPieceContextMenu);
+  });
+
+  // ---- Pan on viewport background ----
+  vpEl.addEventListener('pointerdown', onVPPointerDown, { passive: false });
+  vpEl.addEventListener('pointermove', onVPPointerMove, { passive: false });
+  vpEl.addEventListener('pointerup',   onVPPointerUp);
+  vpEl.addEventListener('pointercancel', onVPPointerUp);
+
+  // ---- Wheel zoom ----
+  vpEl.addEventListener('wheel', onWheel, { passive: false });
+
+  // ---- Touch pinch zoom ----
+  let lastPinchDist = 0;
+  vpEl.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      lastPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  }, { passive: true });
+  vpEl.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (lastPinchDist > 0) {
+        const delta = dist - lastPinchDist;
+        setZoom(game.zoom + delta * 0.003);
+      }
+      lastPinchDist = dist;
+    }
+  }, { passive: true });
+}
+
+function onPiecePointerDown(e) {
+  if (e.button === 2) return;
+  e.stopPropagation();
+  e.preventDefault();
+  const el = e.currentTarget;
+  const pieceIdx = game.pieces.findIndex(p => p.el === el);
+  if (pieceIdx < 0) return;
+
+  const piece = game.pieces[pieceIdx];
+  game.draggingPiece = piece;
+
+  // Compute offset from pointer to piece top-left in WORLD coords
+  const vpRect = document.getElementById('puzzle-viewport').getBoundingClientRect();
+  const worldX = (e.clientX - vpRect.left - game.panX) / game.zoom;
+  const worldY = (e.clientY - vpRect.top  - game.panY) / game.zoom;
+  game.dragOffX = worldX - piece.x;
+  game.dragOffY = worldY - piece.y;
+
+  // Bring to front
+  bringPieceToFront(piece);
+  el.classList.add('dragging');
+
+  document.addEventListener('pointermove', onDocPointerMove, { passive: false });
+  document.addEventListener('pointerup',   onDocPointerUp);
+}
+
+function onDocPointerMove(e) {
+  if (!game.draggingPiece) return;
+  e.preventDefault();
+  const vpRect = document.getElementById('puzzle-viewport').getBoundingClientRect();
+  const worldX = (e.clientX - vpRect.left - game.panX) / game.zoom;
+  const worldY = (e.clientY - vpRect.top  - game.panY) / game.zoom;
+
+  const nx = worldX - game.dragOffX;
+  const ny = worldY - game.dragOffY;
+
+  if (game.draggingPiece.groupId !== null) {
+    // Move entire group
+    const dx = nx - game.draggingPiece.x;
+    const dy = ny - game.draggingPiece.y;
+    getGroupPieces(game.draggingPiece.groupId).forEach(p => {
+      p.x += dx; p.y += dy;
+      p.el.style.left = p.x + 'px';
+      p.el.style.top  = p.y + 'px';
+    });
+  } else {
+    game.draggingPiece.x = nx;
+    game.draggingPiece.y = ny;
+    game.draggingPiece.el.style.left = nx + 'px';
+    game.draggingPiece.el.style.top  = ny + 'px';
+  }
+}
+
+function onDocPointerUp(e) {
+  if (!game.draggingPiece) return;
+  document.removeEventListener('pointermove', onDocPointerMove);
+  document.removeEventListener('pointerup', onDocPointerUp);
+
+  const piece = game.draggingPiece;
+  piece.el.classList.remove('dragging');
+  game.draggingPiece = null;
+  game.moves++;
+  updateGameStats();
+
+  // Try snapping
+  trySnap(piece);
+}
+
+function onPieceContextMenu(e) {
+  e.preventDefault();
+  if (!cfg.adv.rotation) return;
+  const el = e.currentTarget;
+  const piece = game.pieces.find(p => p.el === el);
+  if (!piece || piece.snapped) return;
+  piece.rotation = (piece.rotation + 90) % 360;
+  piece.el.style.transform = piece.rotation ? `rotate(${piece.rotation}deg)` : '';
+}
+
+function trySnap(piece) {
+  if (piece.snapped) return;
+  const pw = game.pieceW, ph = game.pieceH;
+  const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
+  const N = cfg.cols;
+
+  // Target world position for this piece
+  const targetX = game.boardX + piece.c * pw - piece.margin;
+  const targetY = game.boardY + piece.r * ph - piece.margin;
+
+  // Check distance to its correct board position
+  const dist = Math.hypot(piece.x - targetX, piece.y - targetY);
+
+  if (dist < snapDist && piece.rotation === 0) {
+    // Snap to board position
+    piece.el.classList.add('snapping');
+    piece.x = targetX; piece.y = targetY;
+    piece.el.style.left = targetX + 'px';
+    piece.el.style.top  = targetY + 'px';
+    piece.snapped = true;
+    game.solved++;
+    setTimeout(() => piece.el.classList.remove('snapping'), 250);
+    updateGameStats();
+    if (game.solved === N * N) { setTimeout(handleWin, 400); return; }
+  } else {
+    // Try snapping to an already-placed neighbor piece
+    const neighbors = [
+      { r: piece.r-1, c: piece.c }, { r: piece.r+1, c: piece.c },
+      { r: piece.r, c: piece.c-1 }, { r: piece.r, c: piece.c+1 },
+    ];
+    for (const nb of neighbors) {
+      if (nb.r < 0 || nb.r >= N || nb.c < 0 || nb.c >= N) continue;
+      const nbPiece = game.pieces.find(p => p.r === nb.r && p.c === nb.c);
+      if (!nbPiece || !nbPiece.snapped) continue;
+
+      const expectedX = game.boardX + piece.c * pw - piece.margin;
+      const expectedY = game.boardY + piece.r * ph - piece.margin;
+      const nbExpX    = game.boardX + nbPiece.c * pw - nbPiece.margin;
+      const nbExpY    = game.boardY + nbPiece.r * ph - nbPiece.margin;
+      // Actual offset we'd need
+      const actualX = nbPiece.x + (expectedX - nbExpX);
+      const actualY = nbPiece.y + (expectedY - nbExpY);
+      const d2 = Math.hypot(piece.x - actualX, piece.y - actualY);
+
+      if (d2 < snapDist && piece.rotation === 0) {
+        piece.el.classList.add('snapping');
+        piece.x = actualX; piece.y = actualY;
+        piece.el.style.left = actualX + 'px';
+        piece.el.style.top  = actualY + 'px';
+        piece.snapped = true;
+        game.solved++;
+
+        // Group management
+        if (nbPiece.groupId !== null) {
+          piece.groupId = nbPiece.groupId;
+        } else {
+          const newGroupId = Date.now() + Math.random();
+          nbPiece.groupId = newGroupId;
+          piece.groupId   = newGroupId;
+        }
+
+        setTimeout(() => piece.el.classList.remove('snapping'), 250);
+        updateGameStats();
+        if (game.solved === N * N) { setTimeout(handleWin, 400); }
+        break;
+      }
+    }
+  }
+}
+
+function getGroupPieces(groupId) {
+  return game.pieces.filter(p => p.groupId === groupId);
+}
+
+function bringPieceToFront(piece) {
+  let maxZ = 0;
+  game.pieces.forEach(p => { maxZ = Math.max(maxZ, parseInt(p.el.style.zIndex)||0); });
+  const newZ = maxZ + 1;
+  if (piece.groupId !== null) {
+    getGroupPieces(piece.groupId).forEach(p => { p.el.style.zIndex = newZ; });
+  } else {
+    piece.el.style.zIndex = newZ;
+  }
+}
+
+// ---- Viewport pan ----
+function onVPPointerDown(e) {
+  if (e.target.closest('.piece')) return;
+  game.isPanning = true;
+  game.panStartX = e.clientX;
+  game.panStartY = e.clientY;
+  game.panStartPX = game.panX;
+  game.panStartPY = game.panY;
+  document.getElementById('puzzle-viewport').classList.add('panning');
+}
+function onVPPointerMove(e) {
+  if (!game.isPanning) return;
+  e.preventDefault();
+  game.panX = game.panStartPX + (e.clientX - game.panStartX);
+  game.panY = game.panStartPY + (e.clientY - game.panStartY);
+  applyTransform();
+}
+function onVPPointerUp() {
+  game.isPanning = false;
+  const vpEl = document.getElementById('puzzle-viewport');
+  if (vpEl) vpEl.classList.remove('panning');
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+  // Zoom toward mouse position
+  const vpRect = document.getElementById('puzzle-viewport').getBoundingClientRect();
+  const mx = e.clientX - vpRect.left;
+  const my = e.clientY - vpRect.top;
+  const oldZoom = game.zoom;
+  const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta));
+  game.panX = mx - (mx - game.panX) * (newZoom / oldZoom);
+  game.panY = my - (my - game.panY) * (newZoom / oldZoom);
+  game.zoom = newZoom;
+  applyTransform();
+}
+
+function setZoom(z) {
+  game.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+  applyTransform();
+}
+
+function applyTransform() {
+  document.getElementById('puzzle-world').style.transform =
+    `translate(${game.panX}px,${game.panY}px) scale(${game.zoom})`;
+}
+
+// Piece size toggle (S / M / L)
+const PSZ_SCALES = { S: 0.72, M: 1.0, L: 1.32 };
+document.querySelectorAll('.sz-btn').forEach(btn => {
+  btn.onclick = () => {
+    const lbl = btn.dataset.psz;
+    if (game._pszLabel === lbl) return; // no change
+    document.querySelectorAll('.sz-btn').forEach(b => b.classList.toggle('active', b.dataset.psz === lbl));
+    game.pieceScale  = PSZ_SCALES[lbl];
+    game._pszLabel   = lbl;
+    // Rebuild the current puzzle at the new size (preserving state for slider, re-scattering for jigsaw)
+    if (!document.getElementById('game-screen').classList.contains('hidden') && game.img) {
+      if (cfg.mode === 'slider') {
+        buildSliderFromState(); // just re-renders tiles at new size, keeps current tile order
+      } else {
+        buildJigsaw(); // re-build jigsaw at new board size; pieces re-scatter
+      }
+    }
+  };
+});
+
+// Zoom buttons
+document.getElementById('zoom-in-btn').onclick  = () => setZoom(game.zoom + ZOOM_STEP);
+document.getElementById('zoom-out-btn').onclick = () => setZoom(game.zoom - ZOOM_STEP);
+
+// ══════════════════════════════════════════════════════════════
+//  GAME STATS & WIN
+// ══════════════════════════════════════════════════════════════
+function updateGameStats() {
+  const N = cfg.cols;
+  const total = N * N;
+  const placed = cfg.mode === 'slider'
+    ? (isSliderSolved() ? total : 0) // slider: just show moves
+    : game.solved;
+
+  document.getElementById('stat-pieces-val').textContent =
+    cfg.mode === 'slider' ? `${game.moves} moves` : `${placed}/${total}`;
+  document.getElementById('stat-moves-val').textContent = game.moves;
+}
+
+function handleWin() {
+  clearInterval(game.timerInterval);
+  showScreen('win-screen');
+  launchConfetti();
+
+  const statsDiv = document.getElementById('win-stats');
+  statsDiv.innerHTML = '';
+
+  if (cfg.mode === 'slider') {
+    addWinStat(statsDiv, game.moves, 'moves');
+    if (cfg.adv.timer) addWinStat(statsDiv, formatTime(game.timerSecs), 'time');
+    // Best score
+    const bestKey = `ng_slider_best_${cfg.cols}`;
+    const prev = localStorage.getItem(bestKey);
+    if (!prev || game.moves < +prev) {
+      localStorage.setItem(bestKey, game.moves);
+      document.getElementById('win-best').style.display = '';
+      document.getElementById('win-best').textContent = '🌟 New Best Score!';
+    } else {
+      document.getElementById('win-best').style.display = '';
+      document.getElementById('win-best').textContent = `Best: ${prev} moves`;
+    }
+  } else {
+    addWinStat(statsDiv, cfg.cols * cfg.cols, 'pieces');
+    addWinStat(statsDiv, game.moves, 'placements');
+    if (cfg.adv.timer) addWinStat(statsDiv, formatTime(game.timerSecs), 'time');
+    document.getElementById('win-best').style.display = 'none';
+  }
+}
+
+function addWinStat(container, val, label) {
+  const card = document.createElement('div');
+  card.className = 'win-stat-card';
+  card.innerHTML = `<div class="win-stat-val">${val}</div><div class="win-stat-label">${label}</div>`;
+  container.appendChild(card);
+}
+
+function formatTime(secs) {
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TOOLBAR BUTTONS
+// ══════════════════════════════════════════════════════════════
+document.getElementById('preview-btn').onclick = () => {
+  if (!cfg.image) return;
+  document.getElementById('preview-overlay-img').src = cfg.image.url;
+  document.getElementById('preview-overlay').classList.add('open');
+};
+document.getElementById('preview-overlay-close').onclick = () =>
+  document.getElementById('preview-overlay').classList.remove('open');
+document.getElementById('preview-overlay').onclick = function(e) {
+  if (e.target === this) this.classList.remove('open');
+};
+
+document.getElementById('help-btn').onclick = () => openModal('gameplay-help-modal');
+document.getElementById('gameplay-help-close').onclick = () => closeModal('gameplay-help-modal');
+
+document.getElementById('home-btn').onclick = () => openModal('menu-modal');
+document.getElementById('menu-resume').onclick  = () => closeModal('menu-modal');
+document.getElementById('menu-restart').onclick = () => { closeModal('menu-modal'); startGame(); };
+document.getElementById('menu-newgame').onclick  = () => { closeModal('menu-modal'); showScreen('setup-screen'); };
+document.getElementById('menu-ghost').onclick   = () => {
+  closeModal('menu-modal');
+  game.ghostVisible = !game.ghostVisible;
+  document.getElementById('board-ghost').classList.toggle('visible', game.ghostVisible);
+  document.getElementById('menu-ghost').textContent = (game.ghostVisible ? '👻 Hide' : '👻 Show') + ' Ghost Image';
+};
+document.getElementById('menu-help').onclick = () => {
+  closeModal('menu-modal');
+  openModal('gameplay-help-modal');
+};
+
+document.getElementById('win-again').onclick = () => { showScreen('game-screen'); startGame(); };
+document.getElementById('win-new').onclick   = () => showScreen('setup-screen');
+
+// ══════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function showScreen(id) {
+  ['setup-screen','game-screen','win-screen'].forEach(s =>
+    document.getElementById(s).classList.toggle('hidden', s !== id)
+  );
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RESIZE HANDLER
+// ══════════════════════════════════════════════════════════════
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (!document.getElementById('game-screen').classList.contains('hidden')) {
+      if (cfg.mode === 'slider') buildSliderFromState();
+      else {
+        // Adjust viewport height but don't re-scatter pieces
+        const vp = document.getElementById('puzzle-viewport');
+        const vpH = Math.min(window.innerHeight * 0.72, 700);
+        vp.style.height = vpH + 'px';
+      }
+    }
+  }, 200);
+});
+
+// ══════════════════════════════════════════════════════════════
+//  CONFETTI
+// ══════════════════════════════════════════════════════════════
+function launchConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx    = canvas.getContext('2d');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const COLORS = ['#FF4757','#4D96FF','#6BCB77','#FFD93D','#C77DFF','#FF7F50','#FF6EB4','#00D2C6'];
+  const pieces = Array.from({length:160}, () => ({
+    x: Math.random()*canvas.width, y: Math.random()*-canvas.height,
+    r: Math.random()*8+4, d: Math.random()*3+1,
+    c: COLORS[Math.floor(Math.random()*COLORS.length)],
+    tilt: Math.random()*10-5, tiltV: Math.random()*.1-.05,
+    rot: Math.random()*Math.PI*2, rotV: (Math.random()-.5)*.12,
+    shape: Math.random()>.5 ? 'rect' : 'circle',
+  }));
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p => {
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c;
+      if (p.shape==='circle') { ctx.beginPath(); ctx.arc(0,0,p.r,0,Math.PI*2); ctx.fill(); }
+      else ctx.fillRect(-p.r,-p.r*.5,p.r*2,p.r);
+      ctx.restore();
+      p.y+=p.d+1; p.x+=Math.sin(frame*.02+p.tilt)*1.5;
+      p.rot+=p.rotV; p.tilt+=p.tiltV;
+      if (p.y>canvas.height+20) { p.y=-10; p.x=Math.random()*canvas.width; }
+    });
+    frame++;
+    if (frame<300) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  draw();
+}
+
+// Init
+showScreen('setup-screen');
+</script>
+</body>
+</html>
