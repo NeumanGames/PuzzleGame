@@ -730,40 +730,49 @@ const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 3.0;
 const ZOOM_STEP = 0.2;
 
-// Built-in image categories with curated Unsplash source images (royalty-free)
-// credit: { name, profileUrl } — used for Unsplash attribution requirement
+// Built-in image categories — 5 images each, all Unsplash (royalty-free)
 const BUILTIN_CATS = [
-  { id:'cartoon',   emoji:'🎨', name:'Cartoon',    imgs:[
-    { url:'https://images.unsplash.com/photo-1518791841217-8f162f1912da?w=600', name:'Playful Kitten',    credit:{ name:'Manja Vitolic',    profileUrl:'https://unsplash.com/@madhatterzone?utm_source=NeumanGames&utm_medium=referral' } },
-    { url:'https://images.unsplash.com/photo-1607083206968-13611e3d76db?w=600', name:'Rainbow Cake',      credit:{ name:'Alexander Grey',   profileUrl:'https://unsplash.com/@sharonmccutcheon?utm_source=NeumanGames&utm_medium=referral' } },
+  { id:'cartoon', emoji:'🎨', name:'Colorful & Fun', imgs:[
+    { url:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600', name:'Colorful Macarons',   credit:{ name:'Brigitte Tohm',     profileUrl:'https://unsplash.com/@brigittetohm?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600', name:'Rainbow Sprinkles', credit:{ name:'Sharon McCutcheon', profileUrl:'https://unsplash.com/@sharonmccutcheon?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1567860516261-0ece5d5e9e2b?w=600', name:'Colorful Paints',   credit:{ name:'Sigmund',           profileUrl:'https://unsplash.com/@sigmund?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1563396983906-b3795482a59a?w=600', name:'Colorful Balloons', credit:{ name:'Erin Minuskin',     profileUrl:'https://unsplash.com/@erinminuskin?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1576085898323-218337e3e43c?w=600', name:'Rainbow Umbrella',  credit:{ name:'Clem Onojeghuo',   profileUrl:'https://unsplash.com/@clemono?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
-  { id:'animals',   emoji:'🐾', name:'Animals',    imgs:[
+  { id:'animals', emoji:'🐾', name:'Animals', imgs:[
     { url:'https://images.unsplash.com/photo-1474511320723-9a56873867b5?w=600', name:'Fox in Snow',       credit:{ name:'Ray Hennessy',      profileUrl:'https://unsplash.com/@rayhennessy?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1583511655826-05700d52f4d9?w=600', name:'Golden Retriever',  credit:{ name:'Berkay Gumustekin', profileUrl:'https://unsplash.com/@berkaygumustekin?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=600', name:'Tropical Parrot',   credit:{ name:'Stephanie LeBlanc', profileUrl:'https://unsplash.com/@sleblanc01?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600', name:'Sea Turtle',        credit:{ name:'Tanguy Sauvin',     profileUrl:'https://unsplash.com/@tanguysauvin?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1425082661705-1834bfd09dca?w=600', name:'Curious Elephant',  credit:{ name:'Nam Anh',           profileUrl:'https://unsplash.com/@bepnamanh?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
-  { id:'nature',    emoji:'🌿', name:'Nature',     imgs:[
+  { id:'nature', emoji:'🌿', name:'Nature', imgs:[
     { url:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600', name:'Mountain Lake',     credit:{ name:'Sven Scheuermeier', profileUrl:'https://unsplash.com/@sveninho?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?w=600', name:'Waterfall',         credit:{ name:'Luca Bravo',        profileUrl:'https://unsplash.com/@lucabravo?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1499002238440-d264edd596ec?w=600', name:'Autumn Forest',     credit:{ name:'Felix Mittermeier', profileUrl:'https://unsplash.com/@felixmittermeier?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1462275646964-a0e3386b89fa?w=600', name:'Wildflowers',       credit:{ name:'Aaron Burden',      profileUrl:'https://unsplash.com/@aaronburden?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?w=600', name:'Misty Valley',      credit:{ name:'Tyler Lastovich',   profileUrl:'https://unsplash.com/@lastly?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
-  { id:'space',     emoji:'🚀', name:'Space',      imgs:[
+  { id:'space', emoji:'🚀', name:'Space', imgs:[
     { url:'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=600', name:'Milky Way',         credit:{ name:'Jeremy Thomas',     profileUrl:'https://unsplash.com/@jeremythomasphoto?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?w=600', name:'Moon Surface',      credit:{ name:'NASA',              profileUrl:'https://unsplash.com/@nasa?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=600', name:'Nebula',            credit:{ name:'Aldebaran S',       profileUrl:'https://unsplash.com/@aldebarans?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600', name:'Earth from Space',  credit:{ name:'NASA',              profileUrl:'https://unsplash.com/@nasa?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=600', name:'Galaxy',            credit:{ name:'NASA',              profileUrl:'https://unsplash.com/@nasa?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
-  { id:'landmarks', emoji:'🗺️', name:'Landmarks',  imgs:[
+  { id:'landmarks', emoji:'🗺️', name:'Landmarks', imgs:[
     { url:'https://images.unsplash.com/photo-1500039436846-25ae2f11882e?w=600', name:'Eiffel Tower',      credit:{ name:'Denys Nevozhai',    profileUrl:'https://unsplash.com/@dnevozhai?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=600', name:'Taj Mahal',         credit:{ name:'Sylwia Bartyzel',   profileUrl:'https://unsplash.com/@sylwiabartyzel?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=600', name:'Northern Lights',   credit:{ name:'Lightscape',        profileUrl:'https://unsplash.com/@lightscape?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=600', name:'Colosseum Rome',     credit:{ name:'David Kohler',      profileUrl:'https://unsplash.com/@davidkohler?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1562016600-ece13e8ba570?w=600', name:'Great Wall China',   credit:{ name:'Theodor Vasile',    profileUrl:'https://unsplash.com/@theodorrr?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
-  { id:'food',      emoji:'🍕', name:'Food',       imgs:[
+  { id:'food', emoji:'🍕', name:'Food', imgs:[
     { url:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600', name:'Pizza',             credit:{ name:'Zara Walker',       profileUrl:'https://unsplash.com/@zarawlkr?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=600', name:'Ice Cream',         credit:{ name:'American Heritage', profileUrl:'https://unsplash.com/@americanheritagechocolate?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600', name:'Donuts',            credit:{ name:'Kobby Mendez',      profileUrl:'https://unsplash.com/@kobbymendez?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600', name:'Fresh Salad',        credit:{ name:'Anna Pelzer',       profileUrl:'https://unsplash.com/@annapelzer?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=600', name:'Pancakes',          credit:{ name:'Nathan Dumlao',     profileUrl:'https://unsplash.com/@nate_dumlao?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
 ];
 
@@ -1479,75 +1488,111 @@ function createPiece(r, c, N, tabs) {
 }
 
 /*
- * buildPiecePath — draws a clean jigsaw-tab path.
+ * buildPiecePath — mathematically correct single-knob jigsaw path.
  *
- * The canvas is (pw+2T) × (ph+2T). The rectangular tile core
- * occupies [T, T] → [T+pw, T+ph].
- * Each edge may have a tab (dir=+1, protrudes outward) or
- * a blank (dir=−1, indents inward), or be straight (dir=0).
+ * Canvas is (pw + 2T) × (ph + 2T).
+ * Core tile: top-left corner at (T, T), size pw × ph.
  *
- * Tab shape: two smooth bumps meeting at the midpoint, drawn with
- * cubic Bézier curves that produce the classic rounded peg shape.
+ * Each edge function draws from its start corner to its end corner.
+ * dir = +1  → tab protrudes OUTWARD from the tile (into the padding)
+ * dir = -1  → blank (socket) indents INTO the tile
+ * dir =  0  → straight line
+ *
+ * Tab shape: a single rounded knob, centred on the edge.
+ * Uses 4 cubic Bézier segments that form a smooth mushroom head.
  */
 function buildPiecePath(ctx, pw, ph, T, t) {
-  // Corners of the core rectangle inside the padded canvas
   const x0 = T, y0 = T, x1 = T + pw, y1 = T + ph;
 
-  // Draw one tab/blank edge.
-  // (ax,ay) = start point already moved to
-  // (bx,by) = end point
-  // dir: +1 tab outward, -1 blank inward, 0 straight
-  // axis: 'h' (horizontal edge, tab goes vertically) or 'v'
-  function tabEdge(ax, ay, bx, by, dir, axis) {
-    if (dir === 0) { ctx.lineTo(bx, by); return; }
-    const mx = (ax + bx) / 2, my = (ay + by) / 2;
-    // Tab geometry — fractions of edge length
-    const len  = axis === 'h' ? (bx - ax) : (by - ay);
-    const sign = dir; // +1 or -1
-    const TS   = Math.abs(len) * 0.20; // tab half-width on the edge
-    const TH   = sign * Math.abs(len) * 0.28; // tab height (protrusion)
+  /*
+   * drawTab(ctx, sx, sy, ex, ey, dir, horiz)
+   *   Draws one edge from (sx,sy) to (ex,ey).
+   *   horiz=true  → edge runs horizontally; tab protrudes in ±Y
+   *   horiz=false → edge runs vertically;   tab protrudes in ±X
+   *   dir=+1 protrudes AWAY from tile centre, dir=-1 protrudes INTO tile.
+   */
+  function drawTab(sx, sy, ex, ey, dir, horiz) {
+    if (dir === 0) { ctx.lineTo(ex, ey); return; }
 
-    if (axis === 'h') {
-      // Horizontal edge: tab protrudes in Y
-      const p1x = ax + len * 0.37 - TS, p1y = ay;
-      const p2x = ax + len * 0.37 + TS, p2y = ay;
-      const t1x = mx - TS, t1y = ay + TH;
-      const t2x = mx + TS, t2y = ay + TH;
-      const p3x = ax + len * 0.63 - TS, p3y = ay;
-      const p3ex= ax + len * 0.63 + TS;
-      ctx.lineTo(p1x, p1y);
-      ctx.bezierCurveTo(p1x, p1y, t1x - TS*0.5, ay + TH*0.1, t1x, t1y);
-      ctx.bezierCurveTo(t1x, t1y, mx, t1y + TH*0.25, mx, t1y);
-      ctx.bezierCurveTo(mx, t1y, t2x, t2y + TH*0.25, t2x, t2y);
-      ctx.bezierCurveTo(t2x, t2y, p3ex, ay + TH*0.1, p3ex, p3y);
-      ctx.lineTo(bx, by);
+    if (horiz) {
+      // Edge travels in +X direction (sx < ex always for top; right→left for bottom
+      // is handled by negating below).
+      const dx   = ex - sx;           // signed length (+ve left→right, −ve right→left)
+      const adx  = Math.abs(dx);
+      const neck = adx * 0.18;        // half-width of tab neck
+      const head = adx * 0.22;        // half-width of tab head (wider than neck)
+      const rise = dir * adx * 0.30;  // protrusion height (+up for top, +down for bottom)
+
+      // Neck start / end along the edge
+      const nx1 = sx + dx * 0.37;
+      const nx2 = sx + dx * 0.63;
+      const mid = sx + dx * 0.50;
+
+      // Four control-point rows (y values)
+      const y_edge  = sy;
+      const y_base  = sy + rise * 0.35;   // slight ramp at base
+      const y_knob  = sy + rise;          // top of knob
+      const y_crown = sy + rise * 1.10;   // slight overhang for roundness
+
+      ctx.lineTo(nx1 - neck, y_edge);
+      // Left side of knob
+      ctx.bezierCurveTo(
+        nx1 - neck,  y_base,
+        mid - head,  y_knob,
+        mid,         y_crown
+      );
+      // Right side of knob
+      ctx.bezierCurveTo(
+        mid + head,  y_knob,
+        nx2 + neck,  y_base,
+        nx2 + neck,  y_edge
+      );
+      ctx.lineTo(ex, ey);
+
     } else {
-      // Vertical edge: tab protrudes in X
-      const p1y = ay + (by-ay)*0.37 - TS, p1x = ax;
-      const p2y = ay + (by-ay)*0.37 + TS;
-      const t1y = my - TS, t1x = ax + TH;
-      const t2y = my + TS, t2x = ax + TH;
-      const p3y = ay + (by-ay)*0.63 - TS;
-      const p3ey= ay + (by-ay)*0.63 + TS;
-      ctx.lineTo(p1x, p1y);
-      ctx.bezierCurveTo(ax, p1y, ax + TH*0.1, t1y - TS*0.5, t1x, t1y);
-      ctx.bezierCurveTo(t1x, t1y, t1x + TH*0.25, my, t1x, my);
-      ctx.bezierCurveTo(t1x, my, t2x + TH*0.25, t2y, t2x, t2y);
-      ctx.bezierCurveTo(t2x, t2y, ax + TH*0.1, p3ey, ax, p3ey);
-      ctx.lineTo(bx, by);
+      // Vertical edge
+      const dy   = ey - sy;
+      const ady  = Math.abs(dy);
+      const neck = ady * 0.18;
+      const head = ady * 0.22;
+      const rise = dir * ady * 0.30;
+
+      const ny1 = sy + dy * 0.37;
+      const ny2 = sy + dy * 0.63;
+      const mid = sy + dy * 0.50;
+
+      const x_edge  = sx;
+      const x_base  = sx + rise * 0.35;
+      const x_knob  = sx + rise;
+      const x_crown = sx + rise * 1.10;
+
+      ctx.lineTo(x_edge, ny1 - neck);
+      // Top of knob
+      ctx.bezierCurveTo(
+        x_base,  ny1 - neck,
+        x_knob,  mid - head,
+        x_crown, mid
+      );
+      // Bottom of knob
+      ctx.bezierCurveTo(
+        x_knob,  mid + head,
+        x_base,  ny2 + neck,
+        x_edge,  ny2 + neck
+      );
+      ctx.lineTo(ex, ey);
     }
   }
 
   ctx.beginPath();
   ctx.moveTo(x0, y0);
-  // Top (left→right, dir = t.top, tab protrudes upward = negative Y = dir*-1 in canvas)
-  tabEdge(x0, y0, x1, y0, -t.top,  'h');
-  // Right (top→bottom, dir = t.right, protrudes rightward = positive X)
-  tabEdge(x1, y0, x1, y1,  t.right, 'v');
-  // Bottom (right→left, dir = t.bottom, protrudes downward)
-  tabEdge(x1, y1, x0, y1,  t.bottom,'h');
-  // Left (bottom→top, dir = t.left, protrudes leftward = negative X)
-  tabEdge(x0, y1, x0, y0, -t.left,  'v');
+  // Top edge: left→right, protrusion is -Y (upward in canvas) when dir=+1
+  drawTab(x0, y0, x1, y0,  -t.top,    true);
+  // Right edge: top→bottom, protrusion is +X (rightward) when dir=+1
+  drawTab(x1, y0, x1, y1,   t.right,  false);
+  // Bottom edge: right→left, protrusion is +Y (downward) when dir=+1
+  drawTab(x1, y1, x0, y1,   t.bottom, true);
+  // Left edge: bottom→top, protrusion is -X (leftward) when dir=+1
+  drawTab(x0, y1, x0, y0,  -t.left,   false);
   ctx.closePath();
 }
 
