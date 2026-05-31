@@ -482,7 +482,7 @@ footer {
       <ul>
         <li><span class="mi">🧩</span><span><strong>Jigsaw Mode</strong> — drag and snap interlocking pieces together on the board.</span></li>
         <li><span class="mi">🔢</span><span><strong>Slider Mode</strong> — slide tiles into the empty space to restore the picture.</span></li>
-        <li><span class="mi">📐</span><span><strong>Puzzle Size</strong> — from 3×3 (9 pieces, great for little ones!) up to 8×8 (64 pieces).</span></li>
+        <li><span class="mi">📐</span><span><strong>Puzzle Size</strong> — from 3×3 (9 pieces, great for little ones!) up to 11×11 (121 pieces).</span></li>
         <li><span class="mi">🖼️</span><span><strong>Image</strong> — pick a built-in image, search Unsplash, or upload your own photo.</span></li>
         <li><span class="mi">📦</span><span><strong>Tray Position</strong> — choose where loose pieces wait: all sides, top, bottom, left, or right.</span></li>
         <li><span class="mi">🔄</span><span><strong>Rotation (Advanced)</strong> — pieces start rotated; you must rotate them to snap.</span></li>
@@ -549,6 +549,7 @@ footer {
         <button class="pill" data-sz="6">🚀 Hard<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">6×6 · 36 pieces</small></button>
         <button class="pill" data-sz="7">🏆 Expert<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">7×7 · 49 pieces</small></button>
         <button class="pill" data-sz="8">💥 Master<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">8×8 · 64 pieces</small></button>
+        <button class="pill" data-sz="11">🌌 Mega<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">11×11 · 121 pieces</small></button>
       </div>
     </div>
 
@@ -1144,7 +1145,7 @@ function updateHelpBody() {
       <li><span class="mi">🤝</span><span><strong>Groups move together</strong> — once snapped, drag the whole group at once.</span></li>
       ${cfg.adv.rotation ? '<li><span class="mi">🔄</span><span><strong>Right-click / two-finger tap</strong> to rotate a piece 90°.</span></li>' : ''}
       <li><span class="mi">📐</span><span><strong>Piece size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize pieces anytime.</span></li>
-      <li><span class="mi">🔍</span><span><strong>Zoom</strong> with ➕/➖ or pinch (mobile) / scroll wheel (desktop).</span></li>
+      <li><span class="mi">🔍</span><span><strong>Zoom</strong> with ➕/➖, pinch (mobile), or Ctrl+scroll (desktop).</span></li>
       <li><span class="mi">🗺</span><span><strong>Fit to screen</strong> — tap 🗺 to zoom out and see all pieces at once.</span></li>
       <li><span class="mi">✊</span><span><strong>Pan</strong> by dragging the background.</span></li>
       <li><span class="mi">👁️</span><span><strong>Preview</strong> the full image anytime with the 👁️ button.</span></li>
@@ -1383,7 +1384,7 @@ function buildJigsaw() {
   const canvas = document.createElement('canvas');
   canvas.width  = vpW;
   canvas.height = vpH;
-  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none;';
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:pan-x pan-y;';
   vp.style.position = 'relative';
   // Remove old puzzle-world children (keep board-area for ghost only)
   const world = document.getElementById('puzzle-world');
@@ -1617,32 +1618,88 @@ function drawJigsaw() {
 }
 
 // ── SCATTER ───────────────────────────────────────────────────
+// Places pieces in the tray zones using a grid-slot approach so
+// pieces don't overlap each other on initial setup.
 function scatterPieces() {
   const bx = game.boardX, by = game.boardY;
   const bw = game.boardW, bh = game.boardH;
   const pw = game.pieceW, ph = game.pieceH;
   const wW = game.worldW, wH = game.worldH;
-  const gap  = pw * 0.5;
-  const tray = cfg.tray;
+  // Include tab overhang in effective piece footprint
+  const tabExt = Math.min(pw, ph) * 0.45;
+  const cellW  = pw + tabExt * 2 + 6;   // slot size with a little spacing
+  const cellH  = ph + tabExt * 2 + 6;
+  const tray   = cfg.tray;
+  const N      = cfg.cols;
 
-  const shuffled = [...game.pieces].sort(() => Math.random() - 0.5);
-
-  shuffled.forEach((p, i) => {
-    const side = tray === 'all' ? ['top','bottom','left','right'][i % 4] : tray;
-    let tx, ty;
+  // Build slot grids for each side
+  // Each slot is { x, y } = top-left world coord (already accounting for tabExt)
+  function makeSlots(side) {
+    const slots = [];
+    const pad = Math.min(pw, ph) * 0.15;   // gap between board and tray
 
     if (side === 'top') {
-      tx = bx + Math.random() * Math.max(pw, bw - pw);
-      ty = Math.max(gap, by - ph - gap - Math.random() * ph * 1.5);
+      const areaX = bx; const areaW = bw;
+      const areaY = 4;  const areaH = Math.max(cellH, by - pad - 4);
+      const cols = Math.max(1, Math.floor(areaW / cellW));
+      const rows = Math.max(1, Math.floor(areaH / cellH));
+      for (let r = rows - 1; r >= 0; r--)
+        for (let c = 0; c < cols; c++)
+          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
     } else if (side === 'bottom') {
-      tx = bx + Math.random() * Math.max(pw, bw - pw);
-      ty = Math.min(wH - ph - gap, by + bh + gap + Math.random() * ph * 1.5);
+      const areaX = bx; const areaW = bw;
+      const areaY = by + bh + pad; const areaH = Math.max(cellH, wH - areaY - 4);
+      const cols = Math.max(1, Math.floor(areaW / cellW));
+      const rows = Math.max(1, Math.floor(areaH / cellH));
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
     } else if (side === 'left') {
-      tx = Math.max(gap, bx - pw - gap - Math.random() * pw * 1.5);
-      ty = by + Math.random() * Math.max(ph, bh - ph);
+      const areaX = 4; const areaW = Math.max(cellW, bx - pad - 4);
+      const areaY = by; const areaH = bh;
+      const cols = Math.max(1, Math.floor(areaW / cellW));
+      const rows = Math.max(1, Math.floor(areaH / cellH));
+      for (let c = cols - 1; c >= 0; c--)
+        for (let r = 0; r < rows; r++)
+          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
+    } else { // right
+      const areaX = bx + bw + pad; const areaW = Math.max(cellW, wW - areaX - 4);
+      const areaY = by; const areaH = bh;
+      const cols = Math.max(1, Math.floor(areaW / cellW));
+      const rows = Math.max(1, Math.floor(areaH / cellH));
+      for (let c = 0; c < cols; c++)
+        for (let r = 0; r < rows; r++)
+          slots.push({ x: areaX + c * cellW, y: areaY + r * cellH });
+    }
+    // Shuffle slots for variety
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+    return slots;
+  }
+
+  const sides = tray === 'all' ? ['top', 'bottom', 'left', 'right'] : [tray];
+  const slotMap = {};
+  sides.forEach(s => slotMap[s] = makeSlots(s));
+
+  const shuffled = [...game.pieces].sort(() => Math.random() - 0.5);
+  let sideIdx = 0;
+
+  shuffled.forEach((p, i) => {
+    const side = tray === 'all' ? sides[i % 4] : tray;
+    const slots = slotMap[side];
+
+    let tx, ty;
+    if (slots.length > 0) {
+      const slot = slots.shift();   // take the next pre-computed slot
+      // Centre the piece in the slot (accounting for tab extent)
+      tx = slot.x + tabExt;
+      ty = slot.y + tabExt;
     } else {
-      tx = Math.min(wW - pw - gap, bx + bw + gap + Math.random() * pw * 1.5);
-      ty = by + Math.random() * Math.max(ph, bh - ph);
+      // Fallback: random position in the tray area
+      tx = bx + Math.random() * bw;
+      ty = by + Math.random() * bh;
     }
 
     p.px = Math.max(0, Math.min(wW - pw, tx));
@@ -1776,6 +1833,7 @@ function setupCanvasInteraction() {
   canvas.addEventListener('pointerdown', e => {
     if (e.button === 2) return;
     e.preventDefault();
+    game._puzzleActive = true;   // user is interacting — enable wheel zoom
     canvas.setPointerCapture(e.pointerId);
 
     const { wx, wy } = worldPos(e.clientX, e.clientY);
@@ -1858,8 +1916,14 @@ function setupCanvasInteraction() {
     }
   });
 
-  // Wheel zoom
+  // Wheel zoom — only intercept when pointer is inside the canvas
+  // and Ctrl is held OR the page is not scrollable at that position.
+  // This prevents accidental zoom when user intends to scroll the page.
   canvas.addEventListener('wheel', e => {
+    // Only intercept scroll-to-zoom when Ctrl/Meta held OR user is actively
+    // interacting with the puzzle (has dragged a piece or panned recently).
+    // Without this, normal page scroll gets eaten by the canvas.
+    if (!e.ctrlKey && !e.metaKey && !game._puzzleActive) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -1998,17 +2062,24 @@ function fitToScreen() {
 }
 
 // Piece size toggle (S / M / L)
-const PSZ_SCALES = { S: 0.72, M: 1.0, L: 1.32 };
+// These scale the board (and therefore each piece). S = small pieces (more
+// board coverage visible), L = large pieces (easier to grab on touch).
+const PSZ_SCALES = { S: 0.55, M: 1.0, L: 1.65 };
 document.querySelectorAll('.sz-btn').forEach(btn => {
   btn.onclick = () => {
     const lbl = btn.dataset.psz;
     if (game._pszLabel === lbl) return;
     document.querySelectorAll('.sz-btn').forEach(b => b.classList.toggle('active', b.dataset.psz === lbl));
+    const oldScale = game.pieceScale;
     game.pieceScale = PSZ_SCALES[lbl];
     game._pszLabel  = lbl;
     if (!document.getElementById('game-screen').classList.contains('hidden') && game.img) {
-      if (cfg.mode === 'slider') buildSliderFromState();
-      else buildJigsaw();
+      if (cfg.mode === 'slider') {
+        buildSliderFromState();
+      } else {
+        // Resize board & pieces WITHOUT re-scattering — preserve piece positions
+        resizeJigsawBoard(oldScale);
+      }
     }
   };
 });
@@ -2017,6 +2088,48 @@ document.querySelectorAll('.sz-btn').forEach(btn => {
 document.getElementById('zoom-in-btn').onclick  = () => setZoom(game.zoom + ZOOM_STEP);
 document.getElementById('zoom-out-btn').onclick = () => setZoom(game.zoom - ZOOM_STEP);
 document.getElementById('fit-btn').onclick      = () => fitToScreen();
+
+// ── RESIZE BOARD (S/M/L) — preserves piece positions ─────────
+// Scales the board and pieces proportionally. Each piece's world position
+// is remapped so it stays in the same relative location on screen.
+function resizeJigsawBoard(oldScale) {
+  const N = cfg.cols;
+  const vp  = document.getElementById('puzzle-viewport');
+  const vpW = vp.clientWidth  || window.innerWidth - 24;
+  const vpH = vp.clientHeight || Math.min(window.innerHeight * 0.72, 700);
+
+  const boardFrac = cfg.tray === 'all' ? 0.52
+                  : (cfg.tray === 'left' || cfg.tray === 'right') ? 0.60 : 0.68;
+  const newBoardW = Math.floor(Math.min(vpW * boardFrac, vpH * boardFrac) * game.pieceScale);
+  const oldBoardW = game.boardW;
+  const ratio     = newBoardW / oldBoardW;   // how much everything scales
+
+  const newBoardX = game.boardX; // board stays centred in world
+  const newBoardY = game.boardY;
+
+  // Remap each piece's position: scale relative to board centre
+  const oldCX = game.boardX + oldBoardW / 2;
+  const oldCY = game.boardY + game.boardH / 2;
+
+  game.pieces.forEach(p => {
+    // Offset from board centre → scale → add new board centre
+    p.px = newBoardX + (p.px - game.boardX) * ratio;
+    p.py = newBoardY + (p.py - game.boardY) * ratio;
+    // Update snap positions
+    p.snapPx = newBoardX + p.c * (newBoardW / N);
+    p.snapPy = newBoardY + p.r * (newBoardW / N);
+    // If already snapped, move to correct snap position
+    if (p.snapped) { p.px = p.snapPx; p.py = p.snapPy; }
+  });
+
+  game.boardW = newBoardW;
+  game.boardH = newBoardW;
+  game.pieceW = newBoardW / N;
+  game.pieceH = newBoardW / N;
+
+  // Regenerate tab shapes at new size (same dirs/params, just redrawn at new scale)
+  fitToScreen();
+}
 
 // ══════════════════════════════════════════════════════════════
 //  GAME STATS & WIN
