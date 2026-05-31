@@ -233,6 +233,8 @@ header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
 .icon-btn.home:hover    { box-shadow:0 6px 0 #b3001b; }
 .icon-btn.zoom-in  { background:#fff; color:var(--navy); box-shadow:0 4px 0 #bbb; }
 .icon-btn.zoom-out { background:#fff; color:var(--navy); box-shadow:0 4px 0 #bbb; }
+.icon-btn.fit-btn  { background:#fff; color:var(--navy); box-shadow:0 4px 0 #bbb; font-size:1.1rem; }
+.icon-btn.fit-btn:hover { box-shadow:0 6px 0 #bbb; }
 .icon-btn.preview-btn { background:var(--purple); color:#fff; box-shadow:0 4px 0 #7a1fb0; }
 .icon-btn.preview-btn:hover { box-shadow:0 6px 0 #7a1fb0; }
 
@@ -658,6 +660,7 @@ footer {
         </div>
         <button class="icon-btn zoom-out" id="zoom-out-btn" title="Zoom out">➖</button>
         <button class="icon-btn zoom-in"  id="zoom-in-btn"  title="Zoom in">➕</button>
+        <button class="icon-btn fit-btn"  id="fit-btn"      title="Fit puzzle to screen">⊡</button>
         <button class="icon-btn preview-btn" id="preview-btn" title="Preview image">👁️</button>
         <button class="icon-btn help" id="help-btn" title="How to play">❓</button>
         <button class="icon-btn home" id="home-btn" title="Menu">🏠</button>
@@ -1133,6 +1136,7 @@ function updateHelpBody() {
       ${cfg.adv.rotation ? '<li><span class="mi">🔄</span><span><strong>Right-click / two-finger tap</strong> to rotate a piece 90°.</span></li>' : ''}
       <li><span class="mi">📐</span><span><strong>Piece size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize pieces anytime.</span></li>
       <li><span class="mi">🔍</span><span><strong>Zoom</strong> with ➕/➖ or pinch (mobile) / scroll wheel (desktop).</span></li>
+      <li><span class="mi">⊡</span><span><strong>Fit to screen</strong> — tap ⊡ to zoom out and see all pieces at once.</span></li>
       <li><span class="mi">✊</span><span><strong>Pan</strong> by dragging the background.</span></li>
       <li><span class="mi">👁️</span><span><strong>Preview</strong> the full image anytime with the 👁️ button.</span></li>
     </ul>`;
@@ -1367,16 +1371,10 @@ function buildJigsaw() {
     }
   }
 
-  // Pan to center board on screen
-  game.panX = (vpW - boardW) / 2 - game.boardX * game.zoom + (vpW - vpW * game.zoom) / 2;
-  game.panY = (vpH - boardH) / 2 - game.boardY * game.zoom;
-  // Simpler: just center the world so board is visible
-  game.panX = -(worldW * game.zoom - vpW) / 2;
-  game.panY = -(worldH * game.zoom - vpH) / 2;
-  applyTransform();
-
-  // Scatter pieces to tray positions
+  // Scatter pieces to tray positions, then fit everything into view
   scatterPieces();
+  // Small delay so the DOM has laid out before we measure
+  requestAnimationFrame(() => fitToScreen());
 
   updateGameStats();
   setupJigsawInteraction();
@@ -1388,37 +1386,43 @@ function generateTabs(N) {
     tabs[r] = [];
     for (let c = 0; c < N; c++) {
       tabs[r][c] = {
-        right:  c < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight && c === N-1 ? (Math.random()>.5?1:-1) : 0),
-        bottom: r < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight && r === N-1 ? (Math.random()>.5?1:-1) : 0),
+        right:  c < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0),
+        bottom: r < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0),
       };
     }
   }
-  // Ensure neighbour edges are complementary
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
       if (c < N-1) tabs[r][c+1].left = -tabs[r][c].right;
       if (r < N-1) tabs[r+1][c].top  = -tabs[r][c].bottom;
     }
   }
-  // Fill border edges
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
-      if (tabs[r][c].left  === undefined) tabs[r][c].left  = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
-      if (tabs[r][c].top   === undefined) tabs[r][c].top   = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
-      if (tabs[r][c].right === undefined) tabs[r][c].right  = 0;
-      if (tabs[r][c].bottom=== undefined) tabs[r][c].bottom = 0;
+      if (tabs[r][c].left   === undefined) tabs[r][c].left   = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
+      if (tabs[r][c].top    === undefined) tabs[r][c].top    = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
+      if (tabs[r][c].right  === undefined) tabs[r][c].right  = 0;
+      if (tabs[r][c].bottom === undefined) tabs[r][c].bottom = 0;
     }
   }
   return tabs;
 }
 
+// ── PIECE RENDERING ───────────────────────────────────────────
+// Each piece canvas is exactly (pw + 2*TAB_PX) × (ph + 2*TAB_PX).
+// The "core" tile occupies [TAB_PX, TAB_PX, pw, ph] inside the canvas.
+// piece.x / piece.y always refer to the canvas top-left in world coords.
+// The piece's correct board position (canvas top-left) is:
+//   snapX = boardX + c*pw - TAB_PX
+//   snapY = boardY + r*ph - TAB_PX
+// This is consistent across all pieces so snap math is simple.
+
 function createPiece(r, c, N, tabs) {
   const pw  = game.pieceW;
   const ph  = game.pieceH;
-  const tab = TAB_SIZE;
-  const margin = Math.ceil(pw * tab) + 2; // extra canvas margin for tabs
-  const cw  = pw + margin * 2;
-  const ch  = ph + margin * 2;
+  const TAB = Math.round(Math.min(pw, ph) * TAB_SIZE); // pixels of tab protrusion
+  const cw  = pw + TAB * 2;
+  const ch  = ph + TAB * 2;
 
   const el  = document.createElement('div');
   el.className = 'piece';
@@ -1430,101 +1434,124 @@ function createPiece(r, c, N, tabs) {
   canvas.height = ch;
   const ctx = canvas.getContext('2d');
 
-  // Build clip path
   const t = tabs[r][c];
-  buildPiecePath(ctx, pw, ph, margin, t, tab);
-  ctx.save();
-  ctx.clip();
 
-  // Draw image slice (with margin offset)
+  // 1. Draw clipped image
+  ctx.save();
+  buildPiecePath(ctx, pw, ph, TAB, t);
+  ctx.clip();
+  // Source rectangle in original image
   const srcX = c * (game.img.width  / N);
   const srcY = r * (game.img.height / N);
-  const srcW = game.img.width  / N;
-  const srcH = game.img.height / N;
-  ctx.drawImage(game.img, srcX, srcY, srcW, srcH, margin, margin, pw, ph);
+  ctx.drawImage(game.img,
+    srcX, srcY, game.img.width/N, game.img.height/N,
+    TAB, TAB, pw, ph);
   ctx.restore();
 
-  // Draw outline
-  buildPiecePath(ctx, pw, ph, margin, t, tab);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = 1.8;
+  // 2. Stroke outline on top
+  buildPiecePath(ctx, pw, ph, TAB, t);
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   el.appendChild(canvas);
   document.getElementById('puzzle-world').appendChild(el);
 
+  // Correct snap position (canvas top-left in world coords)
+  const snapX = game.boardX + c * pw - TAB;
+  const snapY = game.boardY + r * ph - TAB;
+
   const pieceObj = {
     el, r, c,
-    // current position in world coords (top-left of canvas)
-    x: game.boardX + c * pw - margin,
-    y: game.boardY + r * ph - margin,
-    rotation: cfg.adv.rotation ? [0, 90, 180, 270][Math.floor(Math.random()*4)] : 0,
+    x: snapX, y: snapY,   // will be overwritten by scatterPieces
+    snapX, snapY,          // never changes — correct final position
+    rotation: cfg.adv.rotation ? [0,90,180,270][Math.floor(Math.random()*4)] : 0,
     snapped: false,
     groupId: null,
-    margin,
-    cw, ch,
+    TAB, cw, ch,
   };
   el.style.left = pieceObj.x + 'px';
   el.style.top  = pieceObj.y + 'px';
-  if (pieceObj.rotation) {
-    el.style.transform = `rotate(${pieceObj.rotation}deg)`;
-  }
+  if (pieceObj.rotation) el.style.transform = `rotate(${pieceObj.rotation}deg)`;
   el.dataset.r = r;
   el.dataset.c = c;
   return pieceObj;
 }
 
-function buildPiecePath(ctx, pw, ph, margin, t, tabFrac) {
-  const ts = pw * tabFrac; // tab size in px
-  const mx = margin, my = margin;
+/*
+ * buildPiecePath — draws a clean jigsaw-tab path.
+ *
+ * The canvas is (pw+2T) × (ph+2T). The rectangular tile core
+ * occupies [T, T] → [T+pw, T+ph].
+ * Each edge may have a tab (dir=+1, protrudes outward) or
+ * a blank (dir=−1, indents inward), or be straight (dir=0).
+ *
+ * Tab shape: two smooth bumps meeting at the midpoint, drawn with
+ * cubic Bézier curves that produce the classic rounded peg shape.
+ */
+function buildPiecePath(ctx, pw, ph, T, t) {
+  // Corners of the core rectangle inside the padded canvas
+  const x0 = T, y0 = T, x1 = T + pw, y1 = T + ph;
+
+  // Draw one tab/blank edge.
+  // (ax,ay) = start point already moved to
+  // (bx,by) = end point
+  // dir: +1 tab outward, -1 blank inward, 0 straight
+  // axis: 'h' (horizontal edge, tab goes vertically) or 'v'
+  function tabEdge(ax, ay, bx, by, dir, axis) {
+    if (dir === 0) { ctx.lineTo(bx, by); return; }
+    const mx = (ax + bx) / 2, my = (ay + by) / 2;
+    // Tab geometry — fractions of edge length
+    const len  = axis === 'h' ? (bx - ax) : (by - ay);
+    const sign = dir; // +1 or -1
+    const TS   = Math.abs(len) * 0.20; // tab half-width on the edge
+    const TH   = sign * Math.abs(len) * 0.28; // tab height (protrusion)
+
+    if (axis === 'h') {
+      // Horizontal edge: tab protrudes in Y
+      const p1x = ax + len * 0.37 - TS, p1y = ay;
+      const p2x = ax + len * 0.37 + TS, p2y = ay;
+      const t1x = mx - TS, t1y = ay + TH;
+      const t2x = mx + TS, t2y = ay + TH;
+      const p3x = ax + len * 0.63 - TS, p3y = ay;
+      const p3ex= ax + len * 0.63 + TS;
+      ctx.lineTo(p1x, p1y);
+      ctx.bezierCurveTo(p1x, p1y, t1x - TS*0.5, ay + TH*0.1, t1x, t1y);
+      ctx.bezierCurveTo(t1x, t1y, mx, t1y + TH*0.25, mx, t1y);
+      ctx.bezierCurveTo(mx, t1y, t2x, t2y + TH*0.25, t2x, t2y);
+      ctx.bezierCurveTo(t2x, t2y, p3ex, ay + TH*0.1, p3ex, p3y);
+      ctx.lineTo(bx, by);
+    } else {
+      // Vertical edge: tab protrudes in X
+      const p1y = ay + (by-ay)*0.37 - TS, p1x = ax;
+      const p2y = ay + (by-ay)*0.37 + TS;
+      const t1y = my - TS, t1x = ax + TH;
+      const t2y = my + TS, t2x = ax + TH;
+      const p3y = ay + (by-ay)*0.63 - TS;
+      const p3ey= ay + (by-ay)*0.63 + TS;
+      ctx.lineTo(p1x, p1y);
+      ctx.bezierCurveTo(ax, p1y, ax + TH*0.1, t1y - TS*0.5, t1x, t1y);
+      ctx.bezierCurveTo(t1x, t1y, t1x + TH*0.25, my, t1x, my);
+      ctx.bezierCurveTo(t1x, my, t2x + TH*0.25, t2y, t2x, t2y);
+      ctx.bezierCurveTo(t2x, t2y, ax + TH*0.1, p3ey, ax, p3ey);
+      ctx.lineTo(bx, by);
+    }
+  }
 
   ctx.beginPath();
-  // Top edge
-  ctx.moveTo(mx, my);
-  if (t.top !== 0) {
-    const mid = mx + pw / 2;
-    const bx  = ts * 0.45;
-    const by  = ts * t.top;
-    ctx.bezierCurveTo(mid - bx, my + by * 0.1, mid - bx * 1.2, my + by, mid, my + by);
-    ctx.bezierCurveTo(mid + bx * 1.2, my + by, mid + bx, my + by * 0.1, mx + pw, my);
-  } else {
-    ctx.lineTo(mx + pw, my);
-  }
-  // Right edge
-  if (t.right !== 0) {
-    const mid = my + ph / 2;
-    const bx  = ts * t.right;
-    const by  = ts * 0.45;
-    ctx.bezierCurveTo(mx+pw + bx*0.1, mid - by, mx+pw + bx, mid - by*1.2, mx+pw + bx, mid);
-    ctx.bezierCurveTo(mx+pw + bx, mid + by*1.2, mx+pw + bx*0.1, mid + by, mx+pw, my+ph);
-  } else {
-    ctx.lineTo(mx + pw, my + ph);
-  }
-  // Bottom edge (right to left)
-  if (t.bottom !== 0) {
-    const mid = mx + pw / 2;
-    const bx  = ts * 0.45;
-    const by  = ts * t.bottom;
-    ctx.bezierCurveTo(mx+pw - bx, my+ph + by*0.1, mid + bx*1.2, my+ph + by, mid, my+ph + by);
-    ctx.bezierCurveTo(mid - bx*1.2, my+ph + by, mx + bx, my+ph + by*0.1, mx, my+ph);
-  } else {
-    ctx.lineTo(mx, my + ph);
-  }
-  // Left edge (bottom to top)
-  if (t.left !== 0) {
-    const mid = my + ph / 2;
-    const bx  = ts * t.left;
-    const by  = ts * 0.45;
-    ctx.bezierCurveTo(mx + bx*0.1, mid + by, mx + bx, mid + by*1.2, mx + bx, mid);
-    ctx.bezierCurveTo(mx + bx, mid - by*1.2, mx + bx*0.1, mid - by, mx, my);
-  } else {
-    ctx.lineTo(mx, my);
-  }
+  ctx.moveTo(x0, y0);
+  // Top (left→right, dir = t.top, tab protrudes upward = negative Y = dir*-1 in canvas)
+  tabEdge(x0, y0, x1, y0, -t.top,  'h');
+  // Right (top→bottom, dir = t.right, protrudes rightward = positive X)
+  tabEdge(x1, y0, x1, y1,  t.right, 'v');
+  // Bottom (right→left, dir = t.bottom, protrudes downward)
+  tabEdge(x1, y1, x0, y1,  t.bottom,'h');
+  // Left (bottom→top, dir = t.left, protrudes leftward = negative X)
+  tabEdge(x0, y1, x0, y0, -t.left,  'v');
   ctx.closePath();
 }
 
 function scatterPieces() {
-  const N = cfg.cols;
   const worldW = parseFloat(document.getElementById('puzzle-world').style.width);
   const worldH = parseFloat(document.getElementById('puzzle-world').style.height);
   const bx = game.boardX, by = game.boardY;
@@ -1532,32 +1559,32 @@ function scatterPieces() {
   const tray = cfg.tray;
 
   game.pieces.forEach((p, i) => {
+    const pw = p.cw, ph = p.ch;
+    const gap = Math.max(bw, bh) * 0.06;
     let tx, ty;
-    const margin = bw * 0.04;
-    const pw = game.pieceW + p.margin * 2;
-    const ph = game.pieceH + p.margin * 2;
 
-    if (tray === 'top' || (tray === 'all' && i % 4 === 0)) {
+    const side = tray === 'all' ? ['top','bottom','left','right'][i % 4] : tray;
+
+    if (side === 'top') {
       tx = bx + Math.random() * Math.max(1, bw - pw);
-      ty = by - ph - margin - Math.random() * (by * 0.5);
-    } else if (tray === 'bottom' || (tray === 'all' && i % 4 === 1)) {
+      ty = Math.max(4, by - ph - gap - Math.random() * ph * 2);
+    } else if (side === 'bottom') {
       tx = bx + Math.random() * Math.max(1, bw - pw);
-      ty = by + bh + margin + Math.random() * (worldH - by - bh - ph - margin * 2);
-    } else if (tray === 'left' || (tray === 'all' && i % 4 === 2)) {
-      tx = bx - pw - margin - Math.random() * (bx * 0.5);
+      ty = Math.min(worldH - ph - 4, by + bh + gap + Math.random() * ph * 2);
+    } else if (side === 'left') {
+      tx = Math.max(4, bx - pw - gap - Math.random() * pw * 2);
       ty = by + Math.random() * Math.max(1, bh - ph);
-    } else { // right
-      tx = bx + bw + margin + Math.random() * (worldW - bx - bw - pw - margin * 2);
+    } else {
+      tx = Math.min(worldW - pw - 4, bx + bw + gap + Math.random() * pw * 2);
       ty = by + Math.random() * Math.max(1, bh - ph);
     }
 
-    // Clamp to world bounds
     tx = Math.max(4, Math.min(worldW - pw - 4, tx));
     ty = Math.max(4, Math.min(worldH - ph - 4, ty));
 
     p.x = tx; p.y = ty;
-    p.el.style.left = tx + 'px';
-    p.el.style.top  = ty + 'px';
+    p.el.style.left  = tx + 'px';
+    p.el.style.top   = ty + 'px';
     p.el.style.zIndex = i + 10;
   });
 }
@@ -1699,68 +1726,69 @@ function trySnap(piece) {
   const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
   const N = cfg.cols;
 
-  // Target world position for this piece
-  const targetX = game.boardX + piece.c * pw - piece.margin;
-  const targetY = game.boardY + piece.r * ph - piece.margin;
-
-  // Check distance to its correct board position
-  const dist = Math.hypot(piece.x - targetX, piece.y - targetY);
-
-  if (dist < snapDist && piece.rotation === 0) {
-    // Snap to board position
-    piece.el.classList.add('snapping');
-    piece.x = targetX; piece.y = targetY;
-    piece.el.style.left = targetX + 'px';
-    piece.el.style.top  = targetY + 'px';
-    piece.snapped = true;
-    game.solved++;
-    setTimeout(() => piece.el.classList.remove('snapping'), 250);
-    updateGameStats();
-    if (game.solved === N * N) { setTimeout(handleWin, 400); return; }
-  } else {
-    // Try snapping to an already-placed neighbor piece
-    const neighbors = [
-      { r: piece.r-1, c: piece.c }, { r: piece.r+1, c: piece.c },
-      { r: piece.r, c: piece.c-1 }, { r: piece.r, c: piece.c+1 },
-    ];
-    for (const nb of neighbors) {
-      if (nb.r < 0 || nb.r >= N || nb.c < 0 || nb.c >= N) continue;
-      const nbPiece = game.pieces.find(p => p.r === nb.r && p.c === nb.c);
-      if (!nbPiece || !nbPiece.snapped) continue;
-
-      const expectedX = game.boardX + piece.c * pw - piece.margin;
-      const expectedY = game.boardY + piece.r * ph - piece.margin;
-      const nbExpX    = game.boardX + nbPiece.c * pw - nbPiece.margin;
-      const nbExpY    = game.boardY + nbPiece.r * ph - nbPiece.margin;
-      // Actual offset we'd need
-      const actualX = nbPiece.x + (expectedX - nbExpX);
-      const actualY = nbPiece.y + (expectedY - nbExpY);
-      const d2 = Math.hypot(piece.x - actualX, piece.y - actualY);
-
-      if (d2 < snapDist && piece.rotation === 0) {
-        piece.el.classList.add('snapping');
-        piece.x = actualX; piece.y = actualY;
-        piece.el.style.left = actualX + 'px';
-        piece.el.style.top  = actualY + 'px';
-        piece.snapped = true;
-        game.solved++;
-
-        // Group management
-        if (nbPiece.groupId !== null) {
-          piece.groupId = nbPiece.groupId;
-        } else {
-          const newGroupId = Date.now() + Math.random();
-          nbPiece.groupId = newGroupId;
-          piece.groupId   = newGroupId;
-        }
-
-        setTimeout(() => piece.el.classList.remove('snapping'), 250);
-        updateGameStats();
-        if (game.solved === N * N) { setTimeout(handleWin, 400); }
-        break;
-      }
+  // ── 1. Try snapping directly to board position ──────────────
+  if (piece.rotation === 0) {
+    const dist = Math.hypot(piece.x - piece.snapX, piece.y - piece.snapY);
+    if (dist < snapDist) {
+      snapPieceToPosition(piece, piece.snapX, piece.snapY);
+      return;
     }
   }
+
+  // ── 2. Try snapping to a neighbour piece ─────────────────────
+  if (piece.rotation !== 0) return; // can't snap rotated piece
+  const neighbors = [
+    { dr: -1, dc:  0 }, { dr:  1, dc:  0 },
+    { dr:  0, dc: -1 }, { dr:  0, dc:  1 },
+  ];
+  for (const { dr, dc } of neighbors) {
+    const nr = piece.r + dr, nc = piece.c + dc;
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc);
+    if (!nb || !nb.snapped) continue;
+
+    // Where this piece SHOULD be, relative to its neighbour's canvas position
+    // nb.x = nb.snapX + offset (offset is how far nb drifted from its ideal spot)
+    const offset = nb.x - nb.snapX; // same for X
+    const offsetY = nb.y - nb.snapY;
+    const idealX = piece.snapX + offset;
+    const idealY = piece.snapY + offsetY;
+
+    const dist = Math.hypot(piece.x - idealX, piece.y - idealY);
+    if (dist < snapDist) {
+      snapPieceToPosition(piece, idealX, idealY);
+      // Merge into neighbour's group
+      if (nb.groupId !== null) {
+        piece.groupId = nb.groupId;
+        // Pull all group members to their correct offsets too
+        getGroupPieces(nb.groupId).forEach(gp => {
+          if (gp === piece) return;
+          const gx = gp.snapX + offset;
+          const gy = gp.snapY + offsetY;
+          gp.x = gx; gp.y = gy;
+          gp.el.style.left = gx + 'px';
+          gp.el.style.top  = gy + 'px';
+        });
+      } else {
+        const gid = Date.now() + Math.random();
+        nb.groupId = gid;
+        piece.groupId = gid;
+      }
+      return;
+    }
+  }
+}
+
+function snapPieceToPosition(piece, tx, ty) {
+  piece.el.classList.add('snapping');
+  piece.x = tx; piece.y = ty;
+  piece.el.style.left = tx + 'px';
+  piece.el.style.top  = ty + 'px';
+  piece.snapped = true;
+  game.solved++;
+  setTimeout(() => piece.el.classList.remove('snapping'), 220);
+  updateGameStats();
+  if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
 }
 
 function getGroupPieces(groupId) {
@@ -1826,6 +1854,39 @@ function applyTransform() {
     `translate(${game.panX}px,${game.panY}px) scale(${game.zoom})`;
 }
 
+function fitToScreen() {
+  // Compute bounding box of all pieces + board in world coords
+  const vp = document.getElementById('puzzle-viewport');
+  const vpW = vp.clientWidth  || window.innerWidth - 24;
+  const vpH = vp.clientHeight || Math.min(window.innerHeight * 0.72, 700);
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  game.pieces.forEach(p => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + p.cw);
+    maxY = Math.max(maxY, p.y + p.ch);
+  });
+  // Also include the board
+  minX = Math.min(minX, game.boardX);
+  minY = Math.min(minY, game.boardY);
+  maxX = Math.max(maxX, game.boardX + game.boardW);
+  maxY = Math.max(maxY, game.boardY + game.boardH);
+
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  const padding = 40;
+  const fitZoom = Math.min(
+    (vpW - padding * 2) / contentW,
+    (vpH - padding * 2) / contentH,
+    MAX_ZOOM
+  );
+  game.zoom = Math.max(MIN_ZOOM, fitZoom);
+  game.panX = (vpW - contentW * game.zoom) / 2 - minX * game.zoom;
+  game.panY = (vpH - contentH * game.zoom) / 2 - minY * game.zoom;
+  applyTransform();
+}
+
 // Piece size toggle (S / M / L)
 const PSZ_SCALES = { S: 0.72, M: 1.0, L: 1.32 };
 document.querySelectorAll('.sz-btn').forEach(btn => {
@@ -1846,9 +1907,10 @@ document.querySelectorAll('.sz-btn').forEach(btn => {
   };
 });
 
-// Zoom buttons
+// Zoom buttons + fit to screen
 document.getElementById('zoom-in-btn').onclick  = () => setZoom(game.zoom + ZOOM_STEP);
 document.getElementById('zoom-out-btn').onclick = () => setZoom(game.zoom - ZOOM_STEP);
+document.getElementById('fit-btn').onclick      = () => fitToScreen();
 
 // ══════════════════════════════════════════════════════════════
 //  GAME STATS & WIN
