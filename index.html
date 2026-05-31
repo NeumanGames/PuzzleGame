@@ -660,7 +660,7 @@ footer {
         </div>
         <button class="icon-btn zoom-out" id="zoom-out-btn" title="Zoom out">➖</button>
         <button class="icon-btn zoom-in"  id="zoom-in-btn"  title="Zoom in">➕</button>
-        <button class="icon-btn fit-btn"  id="fit-btn"      title="Fit puzzle to screen">⊡</button>
+        <button class="icon-btn fit-btn"  id="fit-btn"      title="Fit all pieces to screen">🗺</button>
         <button class="icon-btn preview-btn" id="preview-btn" title="Preview image">👁️</button>
         <button class="icon-btn help" id="help-btn" title="How to play">❓</button>
         <button class="icon-btn home" id="home-btn" title="Menu">🏠</button>
@@ -732,10 +732,10 @@ const ZOOM_STEP = 0.2;
 
 // Built-in image categories — 5 images each, all Unsplash (royalty-free)
 const BUILTIN_CATS = [
-  { id:'cartoon', emoji:'🎨', name:'Colorful & Fun', imgs:[
+  { id:'cartoon', emoji:'🎨', name:'Kids & Fun', imgs:[
+    { url:'https://images.unsplash.com/photo-1587654780291-39c9404d746b?w=600', name:'Rainbow Blocks',    credit:{ name:'Mick Haupt',        profileUrl:'https://unsplash.com/@rocinante_11?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600', name:'Colorful Macarons',   credit:{ name:'Brigitte Tohm',     profileUrl:'https://unsplash.com/@brigittetohm?utm_source=NeumanGames&utm_medium=referral' } },
-    { url:'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600', name:'Rainbow Sprinkles', credit:{ name:'Sharon McCutcheon', profileUrl:'https://unsplash.com/@sharonmccutcheon?utm_source=NeumanGames&utm_medium=referral' } },
-    { url:'https://images.unsplash.com/photo-1567860516261-0ece5d5e9e2b?w=600', name:'Colorful Paints',   credit:{ name:'Sigmund',           profileUrl:'https://unsplash.com/@sigmund?utm_source=NeumanGames&utm_medium=referral' } },
+    { url:'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=600', name:'Colorful Crayons',  credit:{ name:'Daniele Levis Pelusi', profileUrl:'https://unsplash.com/@yogidan2012?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1563396983906-b3795482a59a?w=600', name:'Colorful Balloons', credit:{ name:'Erin Minuskin',     profileUrl:'https://unsplash.com/@erinminuskin?utm_source=NeumanGames&utm_medium=referral' } },
     { url:'https://images.unsplash.com/photo-1576085898323-218337e3e43c?w=600', name:'Rainbow Umbrella',  credit:{ name:'Clem Onojeghuo',   profileUrl:'https://unsplash.com/@clemono?utm_source=NeumanGames&utm_medium=referral' } },
   ]},
@@ -1145,7 +1145,7 @@ function updateHelpBody() {
       ${cfg.adv.rotation ? '<li><span class="mi">🔄</span><span><strong>Right-click / two-finger tap</strong> to rotate a piece 90°.</span></li>' : ''}
       <li><span class="mi">📐</span><span><strong>Piece size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize pieces anytime.</span></li>
       <li><span class="mi">🔍</span><span><strong>Zoom</strong> with ➕/➖ or pinch (mobile) / scroll wheel (desktop).</span></li>
-      <li><span class="mi">⊡</span><span><strong>Fit to screen</strong> — tap ⊡ to zoom out and see all pieces at once.</span></li>
+      <li><span class="mi">🗺</span><span><strong>Fit to screen</strong> — tap 🗺 to zoom out and see all pieces at once.</span></li>
       <li><span class="mi">✊</span><span><strong>Pan</strong> by dragging the background.</span></li>
       <li><span class="mi">👁️</span><span><strong>Preview</strong> the full image anytime with the 👁️ button.</span></li>
     </ul>`;
@@ -1318,75 +1318,576 @@ function isSliderSolvable(tiles, N) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  JIGSAW PUZZLE
+//  JIGSAW PUZZLE  —  single-canvas engine
 // ══════════════════════════════════════════════════════════════
+//
+//  DESIGN
+//  ──────
+//  One <canvas> fills the puzzle-viewport. We draw everything:
+//  board shadow, ghost image, piece images, piece outlines, snap highlight.
+//
+//  Each piece stores:
+//    px, py   — top-left of the piece's "core" tile in CANVAS coords
+//               (before pan/zoom — these are "world" coordinates)
+//    snapPx, snapPy — the correct solved position (world coords)
+//    tabDirs  — { top, right, bottom, left }  (+1 tab / -1 socket / 0 flat)
+//    groupId  — null or shared ID for snapped neighbours
+//    snapped  — true once in final position
+//    rotation — 0/90/180/270 (advanced option)
+//    zOrder   — draw order (higher = on top)
+//
+//  World→Screen transform: screenX = worldX * zoom + panX
+//
+//  TAB GEOMETRY (proven approach)
+//  ──────────────────────────────
+//  Each tab is a classic jigsaw knob drawn entirely in NORMALISED space
+//  [0..1] along the edge, then mapped to world coordinates.
+//  The knob sits at 50% of the edge and uses 6 cubic bezier segments
+//  forming a clean mushroom shape.
+
+let jigsawCanvas = null;
+let jigsawCtx    = null;
+
 function buildJigsaw() {
-  const board   = document.getElementById('slider-board');
-  const vp      = document.getElementById('puzzle-viewport');
+  const board = document.getElementById('slider-board');
+  const vp    = document.getElementById('puzzle-viewport');
   board.style.display = 'none';
   vp.style.display    = '';
   document.getElementById('slider-best').style.display = 'none';
   document.getElementById('stat-moves-chip').style.display = '';
 
-  const N = cfg.cols;
+  const N   = cfg.cols;
   const vpW = vp.clientWidth  || window.innerWidth - 24;
   const vpH = Math.min(window.innerHeight * 0.72, 700);
   vp.style.height = vpH + 'px';
 
-  // Board occupies center ~55% of viewport, scaled by pieceScale
-  const boardFrac = cfg.tray === 'all' ? 0.56 : (cfg.tray === 'left' || cfg.tray === 'right' ? 0.64 : 0.72);
-  const boardW = Math.floor(Math.min(vpW * boardFrac, vpH * boardFrac) * game.pieceScale);
-  const boardH = boardW; // square for simplicity
-  game.boardW  = boardW;
-  game.boardH  = boardH;
-  game.pieceW  = boardW / N;
-  game.pieceH  = boardH / N;
+  // Remove old canvas / DOM pieces
+  document.querySelectorAll('.piece').forEach(p => p.remove());
+  if (jigsawCanvas) jigsawCanvas.remove();
+  jigsawCanvas = null;
 
-  // Position board in world center
-  const worldW = vpW * 2.2, worldH = vpH * 2.2;
+  // Board size
+  const boardFrac = cfg.tray === 'all' ? 0.52
+                  : (cfg.tray === 'left' || cfg.tray === 'right') ? 0.60 : 0.68;
+  const boardW = Math.floor(Math.min(vpW * boardFrac, vpH * boardFrac) * game.pieceScale);
+  const boardH = boardW;
+  game.boardW = boardW;  game.boardH = boardH;
+  game.pieceW = boardW / N;  game.pieceH = boardH / N;
+
+  // World size & board position
+  const worldW = vpW * 2.6, worldH = vpH * 2.6;
   game.boardX = (worldW - boardW) / 2;
   game.boardY = (worldH - boardH) / 2;
 
-  // Size world
+  // Create canvas
+  const canvas = document.createElement('canvas');
+  canvas.width  = vpW;
+  canvas.height = vpH;
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none;';
+  vp.style.position = 'relative';
+  // Remove old puzzle-world children (keep board-area for ghost only)
   const world = document.getElementById('puzzle-world');
-  world.style.width  = worldW + 'px';
-  world.style.height = worldH + 'px';
+  world.style.display = 'none';
+  vp.appendChild(canvas);
+  jigsawCanvas = canvas;
+  jigsawCtx    = canvas.getContext('2d');
 
-  // Position board
-  const boardEl = document.getElementById('board-area');
-  boardEl.style.left   = game.boardX + 'px';
-  boardEl.style.top    = game.boardY + 'px';
-  boardEl.style.width  = boardW + 'px';
-  boardEl.style.height = boardH + 'px';
+  game.worldW = worldW;
+  game.worldH = worldH;
+  game.zoom   = 1;
+  game.panX   = 0;
+  game.panY   = 0;
 
-  // Ghost image
-  const ghost = document.getElementById('board-ghost');
-  ghost.style.backgroundImage = `url('${cfg.image.url}')`;
-  ghost.classList.toggle('visible', game.ghostVisible);
-
-  // Remove old pieces
-  document.querySelectorAll('.piece').forEach(p => p.remove());
-  game.pieces = []; game.groups = []; game.solved = 0;
-
-  // Generate tab directions for each edge
-  // tabs[r][c] = { right: ±1, bottom: ±1 }  (1=tab out, -1=tab in, 0=straight)
+  // Generate tab directions
   const tabs = generateTabs(N);
 
-  // Build pieces
+  // Create piece objects
+  game.pieces  = [];
+  game.solved  = 0;
+  game.groups  = [];
+  game.draggingPiece = null;
+
+  let zOrder = 1;
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
-      const piece = createPiece(r, c, N, tabs);
-      game.pieces.push(piece);
+      const snapPx = game.boardX + c * game.pieceW;
+      const snapPy = game.boardY + r * game.pieceH;
+      game.pieces.push({
+        r, c,
+        px: snapPx, py: snapPy,
+        snapPx, snapPy,
+        tabDirs: tabs[r][c],
+        snapped: false,
+        groupId: null,
+        rotation: cfg.adv.rotation ? [0,90,180,270][Math.floor(Math.random()*4)] : 0,
+        zOrder: zOrder++,
+      });
     }
   }
 
-  // Scatter pieces to tray positions, then fit everything into view
+  // Scatter
   scatterPieces();
-  // Small delay so the DOM has laid out before we measure
-  requestAnimationFrame(() => fitToScreen());
 
+  // Initial fit
+  fitToScreen();
+
+  // Draw
+  drawJigsaw();
+
+  // Wire interaction
+  setupCanvasInteraction();
   updateGameStats();
-  setupJigsawInteraction();
+}
+
+// ── TAB PATH (normalised) ─────────────────────────────────────
+// Draws one edge of a jigsaw piece.
+// The edge runs from (x0,y0) to (x1,y1) in world pixels.
+// dir: +1 = knob protrudes outward, -1 = socket, 0 = straight.
+// perpDir: the direction perpendicular to the edge (unit vector {px,py})
+//   pointing OUTWARD from the piece centre.
+// pw: piece width (for knob sizing)
+function drawJigsawEdge(ctx, x0, y0, x1, y1, dir, pw) {
+  if (dir === 0) {
+    ctx.lineTo(x1, y1);
+    return;
+  }
+
+  // Edge vector and length
+  const edx = x1 - x0, edy = y1 - y0;
+  const len = Math.sqrt(edx*edx + edy*edy);
+  // Unit edge direction
+  const ux = edx / len, uy = edy / len;
+  // Unit perpendicular (90° CCW from edge direction = outward for our winding)
+  // For a path going: top L→R, right T→B, bottom R→L, left B→T
+  // the outward perp is always the same rotation: (-uy, ux)
+  // BUT we use dir to flip it for tab vs socket.
+  const px = -uy * dir;
+  const py =  ux * dir;
+
+  // Knob geometry — all as fractions of edge length
+  const S  = len * 0.20;   // half-width of knob neck at base
+  const H  = len * 0.30;   // knob height (protrusion)
+  const R  = len * 0.25;   // half-width of knob head
+
+  // Key points along edge (parametric t)
+  const t1 = 0.35, t2 = 0.65;
+  // Base corners of knob
+  const bL = { x: x0 + edx*t1 - ux*S, y: y0 + edy*t1 - uy*S };
+  const bR = { x: x0 + edx*t2 + ux*S, y: y0 + edy*t2 + uy*S };
+  // Centre of knob top
+  const kx = x0 + edx*0.5 + px*H;
+  const ky = y0 + edy*0.5 + py*H;
+  // Head corners
+  const hL = { x: kx - ux*R, y: ky - uy*R };
+  const hR = { x: kx + ux*R, y: ky + uy*R };
+
+  // Control point helpers — points between base and head
+  const cpLL = { x: bL.x + px*H*0.5, y: bL.y + py*H*0.5 };
+  const cpRR = { x: bR.x + px*H*0.5, y: bR.y + py*H*0.5 };
+
+  ctx.lineTo(bL.x, bL.y);
+  ctx.bezierCurveTo(cpLL.x, cpLL.y, hL.x - ux*S*0.3, hL.y - uy*S*0.3, hL.x, hL.y);
+  ctx.lineTo(hR.x, hR.y);
+  ctx.bezierCurveTo(hR.x + ux*S*0.3, hR.y + uy*S*0.3, cpRR.x, cpRR.y, bR.x, bR.y);
+  ctx.lineTo(x1, y1);
+}
+
+// ── BUILD PIECE PATH ──────────────────────────────────────────
+// Builds a clip/stroke path for piece at world position (px, py).
+// pw, ph = piece width/height in world pixels.
+// The path is built in CANVAS space (world * zoom + pan).
+function buildPiecePathOnCtx(ctx, px, py, pw, ph, tabDirs, zoom, panX, panY) {
+  const toSX = wx => wx * zoom + panX;
+  const toSY = wy => wy * zoom + panY;
+
+  // Corner screen coords
+  const x0 = toSX(px),      y0 = toSY(py);
+  const x1 = toSX(px + pw), y1 = toSY(py);
+  const x2 = toSX(px + pw), y2 = toSY(py + ph);
+  const x3 = toSX(px),      y3 = toSY(py + ph);
+
+  // Scale pw to screen for knob sizing
+  const spw = pw * zoom;
+
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  drawJigsawEdge(ctx, x0, y0, x1, y1, tabDirs.top,    spw);
+  drawJigsawEdge(ctx, x1, y1, x2, y2, tabDirs.right,  spw);
+  drawJigsawEdge(ctx, x2, y2, x3, y3, tabDirs.bottom, spw);
+  drawJigsawEdge(ctx, x3, y3, x0, y0, tabDirs.left,   spw);
+  ctx.closePath();
+}
+
+// ── DRAW EVERYTHING ───────────────────────────────────────────
+function drawJigsaw() {
+  if (!jigsawCtx) return;
+  const ctx   = jigsawCtx;
+  const W     = jigsawCanvas.width;
+  const H     = jigsawCanvas.height;
+  const zoom  = game.zoom;
+  const panX  = game.panX;
+  const panY  = game.panY;
+  const pw    = game.pieceW;
+  const ph    = game.pieceH;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Board background ──
+  const bsx = game.boardX * zoom + panX;
+  const bsy = game.boardY * zoom + panY;
+  const bsw = game.boardW * zoom;
+  const bsh = game.boardH * zoom;
+
+  // Shadow
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur  = 16;
+  ctx.fillStyle   = 'rgba(255,255,255,0.9)';
+  ctx.beginPath();
+  ctx.roundRect(bsx, bsy, bsw, bsh, 10);
+  ctx.fill();
+  ctx.restore();
+
+  // Ghost image
+  if (game.ghostVisible && game.img) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.roundRect(bsx, bsy, bsw, bsh, 10);
+    ctx.clip();
+    ctx.drawImage(game.img, bsx, bsy, bsw, bsh);
+    ctx.restore();
+  }
+
+  // Grid lines on board
+  ctx.save();
+  ctx.strokeStyle = 'rgba(77,150,255,0.15)';
+  ctx.lineWidth   = 1;
+  const N = cfg.cols;
+  for (let i = 1; i < N; i++) {
+    ctx.beginPath();
+    ctx.moveTo(bsx + (bsw/N)*i, bsy);
+    ctx.lineTo(bsx + (bsw/N)*i, bsy + bsh);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bsx, bsy + (bsh/N)*i);
+    ctx.lineTo(bsx + bsw, bsy + (bsh/N)*i);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // ── Sort pieces by zOrder ──
+  const sorted = [...game.pieces].sort((a, b) => a.zOrder - b.zOrder);
+
+  sorted.forEach(p => {
+    ctx.save();
+
+    // Build clip path
+    buildPiecePathOnCtx(ctx, p.px, p.py, pw, ph, p.tabDirs, zoom, panX, panY);
+    ctx.clip();
+
+    // Draw image
+    if (game.img) {
+      const srcX = p.c * (game.img.width  / N);
+      const srcY = p.r * (game.img.height / N);
+      const sx   = p.px * zoom + panX;
+      const sy   = p.py * zoom + panY;
+      const sw   = pw * zoom;
+      const sh   = ph * zoom;
+      ctx.drawImage(game.img, srcX, srcY, game.img.width/N, game.img.height/N, sx, sy, sw, sh);
+    }
+
+    ctx.restore();
+
+    // Outline stroke (on top of image, not clipped)
+    buildPiecePathOnCtx(ctx, p.px, p.py, pw, ph, p.tabDirs, zoom, panX, panY);
+    ctx.strokeStyle = p.snapped ? 'rgba(77,203,119,0.7)' : 'rgba(0,0,0,0.4)';
+    ctx.lineWidth   = p.snapped ? 2.5 : 1.5;
+    ctx.stroke();
+  });
+
+  // Dragging piece highlight
+  if (game.draggingPiece) {
+    const p = game.draggingPiece;
+    buildPiecePathOnCtx(ctx, p.px, p.py, pw, ph, p.tabDirs, zoom, panX, panY);
+    ctx.strokeStyle = 'rgba(77,150,255,0.8)';
+    ctx.lineWidth   = 3;
+    ctx.stroke();
+  }
+}
+
+// ── SCATTER ───────────────────────────────────────────────────
+function scatterPieces() {
+  const bx = game.boardX, by = game.boardY;
+  const bw = game.boardW, bh = game.boardH;
+  const pw = game.pieceW, ph = game.pieceH;
+  const wW = game.worldW, wH = game.worldH;
+  const gap  = pw * 0.5;
+  const tray = cfg.tray;
+
+  const shuffled = [...game.pieces].sort(() => Math.random() - 0.5);
+
+  shuffled.forEach((p, i) => {
+    const side = tray === 'all' ? ['top','bottom','left','right'][i % 4] : tray;
+    let tx, ty;
+
+    if (side === 'top') {
+      tx = bx + Math.random() * Math.max(pw, bw - pw);
+      ty = Math.max(gap, by - ph - gap - Math.random() * ph * 1.5);
+    } else if (side === 'bottom') {
+      tx = bx + Math.random() * Math.max(pw, bw - pw);
+      ty = Math.min(wH - ph - gap, by + bh + gap + Math.random() * ph * 1.5);
+    } else if (side === 'left') {
+      tx = Math.max(gap, bx - pw - gap - Math.random() * pw * 1.5);
+      ty = by + Math.random() * Math.max(ph, bh - ph);
+    } else {
+      tx = Math.min(wW - pw - gap, bx + bw + gap + Math.random() * pw * 1.5);
+      ty = by + Math.random() * Math.max(ph, bh - ph);
+    }
+
+    p.px = Math.max(0, Math.min(wW - pw, tx));
+    p.py = Math.max(0, Math.min(wH - ph, ty));
+  });
+}
+
+// ── SNAP ─────────────────────────────────────────────────────
+function trySnap(piece) {
+  if (piece.snapped) return;
+  const pw = game.pieceW, ph = game.pieceH;
+  const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
+  const N = cfg.cols;
+  if (piece.rotation !== 0) return;
+
+  // Try snapping to final board position first
+  const distToBoard = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
+  if (distToBoard < snapDist) {
+    doSnap(piece, piece.snapPx, piece.snapPy, null);
+    return;
+  }
+
+  // Try snapping to an already-snapped neighbour
+  const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
+  for (const {dr, dc} of dirs) {
+    const nr = piece.r + dr, nc = piece.c + dc;
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
+    const nb = game.pieces.find(p => p.r === nr && p.c === nc && p.snapped);
+    if (!nb) continue;
+
+    // Where piece should be if aligned with nb
+    const idealPx = nb.px + (piece.snapPx - nb.snapPx);
+    const idealPy = nb.py + (piece.snapPy - nb.snapPy);
+    const dist = Math.hypot(piece.px - idealPx, piece.py - idealPy);
+    if (dist < snapDist) {
+      doSnap(piece, idealPx, idealPy, nb);
+      return;
+    }
+  }
+}
+
+function doSnap(piece, tx, ty, neighbor) {
+  // Smooth animation
+  const startX = piece.px, startY = piece.py;
+  const startT = performance.now();
+  const dur = 180;
+  function animate(t) {
+    const prog = Math.min(1, (t - startT) / dur);
+    const ease = 1 - Math.pow(1 - prog, 3);
+    piece.px = startX + (tx - startX) * ease;
+    piece.py = startY + (ty - startY) * ease;
+    drawJigsaw();
+    if (prog < 1) requestAnimationFrame(animate);
+    else {
+      piece.px = tx; piece.py = ty;
+      piece.snapped = true;
+      game.solved++;
+      updateGameStats();
+      drawJigsaw();
+      if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
+    }
+  }
+  requestAnimationFrame(animate);
+
+  // Group management
+  if (neighbor) {
+    if (neighbor.groupId !== null) {
+      piece.groupId = neighbor.groupId;
+    } else {
+      const gid = Date.now() + Math.random();
+      neighbor.groupId = piece.groupId = gid;
+    }
+    // Also snap all neighbours in this group to their correct relative positions
+    if (piece.groupId !== null) {
+      const offsetX = tx - piece.snapPx;
+      const offsetY = ty - piece.snapPy;
+      game.pieces.filter(p => p.groupId === piece.groupId && p !== piece).forEach(gp => {
+        gp.px = gp.snapPx + offsetX;
+        gp.py = gp.snapPy + offsetY;
+      });
+    }
+  }
+}
+
+// ── CANVAS INTERACTION ────────────────────────────────────────
+function setupCanvasInteraction() {
+  const canvas = jigsawCanvas;
+  if (!canvas) return;
+
+  let isPanning = false;
+  let panStartX = 0, panStartY = 0;
+  let panStartPX = 0, panStartPY = 0;
+  let lastPinchDist = 0;
+
+  function worldPos(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      wx: (clientX - rect.left - game.panX) / game.zoom,
+      wy: (clientY - rect.top  - game.panY) / game.zoom,
+    };
+  }
+
+  function pieceAt(wx, wy) {
+    const pw = game.pieceW, ph = game.pieceH;
+    // Check in reverse zOrder (top first)
+    const sorted = [...game.pieces].sort((a,b) => b.zOrder - a.zOrder);
+    for (const p of sorted) {
+      // Hit test on the piece's bounding box (good enough; tabs are small)
+      if (wx >= p.px - pw*0.35 && wx <= p.px + pw*1.35 &&
+          wy >= p.py - ph*0.35 && wy <= p.py + ph*1.35) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button === 2) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+
+    const { wx, wy } = worldPos(e.clientX, e.clientY);
+    const piece = pieceAt(wx, wy);
+
+    if (piece) {
+      game.draggingPiece = piece;
+      game.dragOffX = wx - piece.px;
+      game.dragOffY = wy - piece.py;
+      // Bring to front
+      const maxZ = Math.max(...game.pieces.map(p => p.zOrder));
+      if (piece.groupId !== null) {
+        game.pieces.filter(p => p.groupId === piece.groupId).forEach(p => p.zOrder = maxZ + 1);
+      } else {
+        piece.zOrder = maxZ + 1;
+      }
+      canvas.style.cursor = 'grabbing';
+      drawJigsaw();
+    } else {
+      isPanning = true;
+      panStartX  = e.clientX; panStartY  = e.clientY;
+      panStartPX = game.panX; panStartPY = game.panY;
+      canvas.style.cursor = 'grabbing';
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('pointermove', e => {
+    e.preventDefault();
+    if (game.draggingPiece) {
+      const { wx, wy } = worldPos(e.clientX, e.clientY);
+      const nx = wx - game.dragOffX;
+      const ny = wy - game.dragOffY;
+      const dx = nx - game.draggingPiece.px;
+      const dy = ny - game.draggingPiece.py;
+
+      if (game.draggingPiece.groupId !== null) {
+        game.pieces.filter(p => p.groupId === game.draggingPiece.groupId).forEach(p => {
+          p.px += dx; p.py += dy;
+        });
+      } else {
+        game.draggingPiece.px = nx;
+        game.draggingPiece.py = ny;
+      }
+      drawJigsaw();
+    } else if (isPanning) {
+      game.panX = panStartPX + (e.clientX - panStartX);
+      game.panY = panStartPY + (e.clientY - panStartY);
+      drawJigsaw();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('pointerup', e => {
+    if (game.draggingPiece) {
+      const piece = game.draggingPiece;
+      game.draggingPiece = null;
+      game.moves++;
+      updateGameStats();
+      trySnap(piece);
+      drawJigsaw();
+    }
+    isPanning = false;
+    canvas.style.cursor = 'grab';
+  });
+
+  canvas.addEventListener('pointercancel', () => {
+    game.draggingPiece = null;
+    isPanning = false;
+    canvas.style.cursor = 'grab';
+  });
+
+  // Right-click rotate
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (!cfg.adv.rotation) return;
+    const { wx, wy } = worldPos(e.clientX, e.clientY);
+    const piece = pieceAt(wx, wy);
+    if (piece && !piece.snapped) {
+      piece.rotation = (piece.rotation + 90) % 360;
+      drawJigsaw();
+    }
+  });
+
+  // Wheel zoom
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    const oldZoom = game.zoom;
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta));
+    game.panX = mx - (mx - game.panX) * (newZoom / oldZoom);
+    game.panY = my - (my - game.panY) * (newZoom / oldZoom);
+    game.zoom = newZoom;
+    drawJigsaw();
+  }, { passive: false });
+
+  // Pinch zoom
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      lastPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY);
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY);
+      if (lastPinchDist > 0) setZoom(game.zoom + (dist - lastPinchDist) * 0.004);
+      lastPinchDist = dist;
+    }
+  }, { passive: true });
+
+  // Resize
+  const ro = new ResizeObserver(() => {
+    if (jigsawCanvas) {
+      const vp = document.getElementById('puzzle-viewport');
+      jigsawCanvas.width  = vp.clientWidth;
+      jigsawCanvas.height = vp.clientHeight;
+      drawJigsaw();
+    }
+  });
+  ro.observe(document.getElementById('puzzle-viewport'));
 }
 
 function generateTabs(N) {
@@ -1395,541 +1896,60 @@ function generateTabs(N) {
     tabs[r] = [];
     for (let c = 0; c < N; c++) {
       tabs[r][c] = {
+        top:    0, left: 0,
         right:  c < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0),
         bottom: r < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0),
       };
     }
   }
-  for (let r = 0; r < N; r++) {
+  for (let r = 0; r < N; r++)
     for (let c = 0; c < N; c++) {
       if (c < N-1) tabs[r][c+1].left = -tabs[r][c].right;
       if (r < N-1) tabs[r+1][c].top  = -tabs[r][c].bottom;
     }
-  }
-  for (let r = 0; r < N; r++) {
+  // Border edges: straight unless nostraight option on
+  for (let r = 0; r < N; r++)
     for (let c = 0; c < N; c++) {
-      if (tabs[r][c].left   === undefined) tabs[r][c].left   = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
-      if (tabs[r][c].top    === undefined) tabs[r][c].top    = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
-      if (tabs[r][c].right  === undefined) tabs[r][c].right  = 0;
-      if (tabs[r][c].bottom === undefined) tabs[r][c].bottom = 0;
+      if (tabs[r][c].left  === 0 && c === 0) tabs[r][c].left  = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
+      if (tabs[r][c].top   === 0 && r === 0) tabs[r][c].top   = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
     }
-  }
   return tabs;
 }
 
-// ── PIECE RENDERING ───────────────────────────────────────────
-// Each piece canvas is exactly (pw + 2*TAB_PX) × (ph + 2*TAB_PX).
-// The "core" tile occupies [TAB_PX, TAB_PX, pw, ph] inside the canvas.
-// piece.x / piece.y always refer to the canvas top-left in world coords.
-// The piece's correct board position (canvas top-left) is:
-//   snapX = boardX + c*pw - TAB_PX
-//   snapY = boardY + r*ph - TAB_PX
-// This is consistent across all pieces so snap math is simple.
-
-function createPiece(r, c, N, tabs) {
-  const pw  = game.pieceW;
-  const ph  = game.pieceH;
-  const TAB = Math.round(Math.min(pw, ph) * TAB_SIZE); // pixels of tab protrusion
-  const cw  = pw + TAB * 2;
-  const ch  = ph + TAB * 2;
-
-  const el  = document.createElement('div');
-  el.className = 'piece';
-  el.style.width  = cw + 'px';
-  el.style.height = ch + 'px';
-
-  const canvas = document.createElement('canvas');
-  canvas.width  = cw;
-  canvas.height = ch;
-  const ctx = canvas.getContext('2d');
-
-  const t = tabs[r][c];
-
-  // 1. Draw clipped image
-  ctx.save();
-  buildPiecePath(ctx, pw, ph, TAB, t);
-  ctx.clip();
-  // Source rectangle in original image
-  const srcX = c * (game.img.width  / N);
-  const srcY = r * (game.img.height / N);
-  ctx.drawImage(game.img,
-    srcX, srcY, game.img.width/N, game.img.height/N,
-    TAB, TAB, pw, ph);
-  ctx.restore();
-
-  // 2. Stroke outline on top
-  buildPiecePath(ctx, pw, ph, TAB, t);
-  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  el.appendChild(canvas);
-  document.getElementById('puzzle-world').appendChild(el);
-
-  // Correct snap position (canvas top-left in world coords)
-  const snapX = game.boardX + c * pw - TAB;
-  const snapY = game.boardY + r * ph - TAB;
-
-  const pieceObj = {
-    el, r, c,
-    x: snapX, y: snapY,   // will be overwritten by scatterPieces
-    snapX, snapY,          // never changes — correct final position
-    rotation: cfg.adv.rotation ? [0,90,180,270][Math.floor(Math.random()*4)] : 0,
-    snapped: false,
-    groupId: null,
-    TAB, cw, ch,
-  };
-  el.style.left = pieceObj.x + 'px';
-  el.style.top  = pieceObj.y + 'px';
-  if (pieceObj.rotation) el.style.transform = `rotate(${pieceObj.rotation}deg)`;
-  el.dataset.r = r;
-  el.dataset.c = c;
-  return pieceObj;
-}
-
-/*
- * buildPiecePath — mathematically correct single-knob jigsaw path.
- *
- * Canvas is (pw + 2T) × (ph + 2T).
- * Core tile: top-left corner at (T, T), size pw × ph.
- *
- * Each edge function draws from its start corner to its end corner.
- * dir = +1  → tab protrudes OUTWARD from the tile (into the padding)
- * dir = -1  → blank (socket) indents INTO the tile
- * dir =  0  → straight line
- *
- * Tab shape: a single rounded knob, centred on the edge.
- * Uses 4 cubic Bézier segments that form a smooth mushroom head.
- */
-function buildPiecePath(ctx, pw, ph, T, t) {
-  const x0 = T, y0 = T, x1 = T + pw, y1 = T + ph;
-
-  /*
-   * drawTab(ctx, sx, sy, ex, ey, dir, horiz)
-   *   Draws one edge from (sx,sy) to (ex,ey).
-   *   horiz=true  → edge runs horizontally; tab protrudes in ±Y
-   *   horiz=false → edge runs vertically;   tab protrudes in ±X
-   *   dir=+1 protrudes AWAY from tile centre, dir=-1 protrudes INTO tile.
-   */
-  function drawTab(sx, sy, ex, ey, dir, horiz) {
-    if (dir === 0) { ctx.lineTo(ex, ey); return; }
-
-    if (horiz) {
-      // Edge travels in +X direction (sx < ex always for top; right→left for bottom
-      // is handled by negating below).
-      const dx   = ex - sx;           // signed length (+ve left→right, −ve right→left)
-      const adx  = Math.abs(dx);
-      const neck = adx * 0.18;        // half-width of tab neck
-      const head = adx * 0.22;        // half-width of tab head (wider than neck)
-      const rise = dir * adx * 0.30;  // protrusion height (+up for top, +down for bottom)
-
-      // Neck start / end along the edge
-      const nx1 = sx + dx * 0.37;
-      const nx2 = sx + dx * 0.63;
-      const mid = sx + dx * 0.50;
-
-      // Four control-point rows (y values)
-      const y_edge  = sy;
-      const y_base  = sy + rise * 0.35;   // slight ramp at base
-      const y_knob  = sy + rise;          // top of knob
-      const y_crown = sy + rise * 1.10;   // slight overhang for roundness
-
-      ctx.lineTo(nx1 - neck, y_edge);
-      // Left side of knob
-      ctx.bezierCurveTo(
-        nx1 - neck,  y_base,
-        mid - head,  y_knob,
-        mid,         y_crown
-      );
-      // Right side of knob
-      ctx.bezierCurveTo(
-        mid + head,  y_knob,
-        nx2 + neck,  y_base,
-        nx2 + neck,  y_edge
-      );
-      ctx.lineTo(ex, ey);
-
-    } else {
-      // Vertical edge
-      const dy   = ey - sy;
-      const ady  = Math.abs(dy);
-      const neck = ady * 0.18;
-      const head = ady * 0.22;
-      const rise = dir * ady * 0.30;
-
-      const ny1 = sy + dy * 0.37;
-      const ny2 = sy + dy * 0.63;
-      const mid = sy + dy * 0.50;
-
-      const x_edge  = sx;
-      const x_base  = sx + rise * 0.35;
-      const x_knob  = sx + rise;
-      const x_crown = sx + rise * 1.10;
-
-      ctx.lineTo(x_edge, ny1 - neck);
-      // Top of knob
-      ctx.bezierCurveTo(
-        x_base,  ny1 - neck,
-        x_knob,  mid - head,
-        x_crown, mid
-      );
-      // Bottom of knob
-      ctx.bezierCurveTo(
-        x_knob,  mid + head,
-        x_base,  ny2 + neck,
-        x_edge,  ny2 + neck
-      );
-      ctx.lineTo(ex, ey);
-    }
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  // Top edge: left→right, protrusion is -Y (upward in canvas) when dir=+1
-  drawTab(x0, y0, x1, y0,  -t.top,    true);
-  // Right edge: top→bottom, protrusion is +X (rightward) when dir=+1
-  drawTab(x1, y0, x1, y1,   t.right,  false);
-  // Bottom edge: right→left, protrusion is +Y (downward) when dir=+1
-  drawTab(x1, y1, x0, y1,   t.bottom, true);
-  // Left edge: bottom→top, protrusion is -X (leftward) when dir=+1
-  drawTab(x0, y1, x0, y0,  -t.left,   false);
-  ctx.closePath();
-}
-
-function scatterPieces() {
-  const worldW = parseFloat(document.getElementById('puzzle-world').style.width);
-  const worldH = parseFloat(document.getElementById('puzzle-world').style.height);
-  const bx = game.boardX, by = game.boardY;
-  const bw = game.boardW, bh = game.boardH;
-  const tray = cfg.tray;
-
-  game.pieces.forEach((p, i) => {
-    const pw = p.cw, ph = p.ch;
-    const gap = Math.max(bw, bh) * 0.06;
-    let tx, ty;
-
-    const side = tray === 'all' ? ['top','bottom','left','right'][i % 4] : tray;
-
-    if (side === 'top') {
-      tx = bx + Math.random() * Math.max(1, bw - pw);
-      ty = Math.max(4, by - ph - gap - Math.random() * ph * 2);
-    } else if (side === 'bottom') {
-      tx = bx + Math.random() * Math.max(1, bw - pw);
-      ty = Math.min(worldH - ph - 4, by + bh + gap + Math.random() * ph * 2);
-    } else if (side === 'left') {
-      tx = Math.max(4, bx - pw - gap - Math.random() * pw * 2);
-      ty = by + Math.random() * Math.max(1, bh - ph);
-    } else {
-      tx = Math.min(worldW - pw - 4, bx + bw + gap + Math.random() * pw * 2);
-      ty = by + Math.random() * Math.max(1, bh - ph);
-    }
-
-    tx = Math.max(4, Math.min(worldW - pw - 4, tx));
-    ty = Math.max(4, Math.min(worldH - ph - 4, ty));
-
-    p.x = tx; p.y = ty;
-    p.el.style.left  = tx + 'px';
-    p.el.style.top   = ty + 'px';
-    p.el.style.zIndex = i + 10;
-  });
-}
-
-// ══════════════════════════════════════════════════════════════
-//  JIGSAW INTERACTION (drag, snap, pan, zoom)
-// ══════════════════════════════════════════════════════════════
-function setupJigsawInteraction() {
-  const vp    = document.getElementById('puzzle-viewport');
-  const world = document.getElementById('puzzle-world');
-
-  // Remove old listeners by cloning
-  const newVP = vp.cloneNode(false);
-  while (vp.firstChild) newVP.appendChild(vp.firstChild);
-  vp.parentNode.replaceChild(newVP, vp);
-  const vpEl = document.getElementById('puzzle-viewport');
-
-  // ---- Pointer events on pieces ----
-  document.querySelectorAll('.piece').forEach((el, i) => {
-    el.addEventListener('pointerdown', onPiecePointerDown, { passive: false });
-    el.addEventListener('contextmenu', onPieceContextMenu);
-  });
-
-  // ---- Pan on viewport background ----
-  vpEl.addEventListener('pointerdown', onVPPointerDown, { passive: false });
-  vpEl.addEventListener('pointermove', onVPPointerMove, { passive: false });
-  vpEl.addEventListener('pointerup',   onVPPointerUp);
-  vpEl.addEventListener('pointercancel', onVPPointerUp);
-
-  // ---- Wheel zoom ----
-  vpEl.addEventListener('wheel', onWheel, { passive: false });
-
-  // ---- Touch pinch zoom ----
-  let lastPinchDist = 0;
-  vpEl.addEventListener('touchstart', e => {
-    if (e.touches.length === 2) {
-      lastPinchDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-    }
-  }, { passive: true });
-  vpEl.addEventListener('touchmove', e => {
-    if (e.touches.length === 2) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      if (lastPinchDist > 0) {
-        const delta = dist - lastPinchDist;
-        setZoom(game.zoom + delta * 0.003);
-      }
-      lastPinchDist = dist;
-    }
-  }, { passive: true });
-}
-
-function onPiecePointerDown(e) {
-  if (e.button === 2) return;
-  e.stopPropagation();
-  e.preventDefault();
-  const el = e.currentTarget;
-  const pieceIdx = game.pieces.findIndex(p => p.el === el);
-  if (pieceIdx < 0) return;
-
-  const piece = game.pieces[pieceIdx];
-  game.draggingPiece = piece;
-
-  // Compute offset from pointer to piece top-left in WORLD coords
-  const vpRect = document.getElementById('puzzle-viewport').getBoundingClientRect();
-  const worldX = (e.clientX - vpRect.left - game.panX) / game.zoom;
-  const worldY = (e.clientY - vpRect.top  - game.panY) / game.zoom;
-  game.dragOffX = worldX - piece.x;
-  game.dragOffY = worldY - piece.y;
-
-  // Bring to front
-  bringPieceToFront(piece);
-  el.classList.add('dragging');
-
-  document.addEventListener('pointermove', onDocPointerMove, { passive: false });
-  document.addEventListener('pointerup',   onDocPointerUp);
-}
-
-function onDocPointerMove(e) {
-  if (!game.draggingPiece) return;
-  e.preventDefault();
-  const vpRect = document.getElementById('puzzle-viewport').getBoundingClientRect();
-  const worldX = (e.clientX - vpRect.left - game.panX) / game.zoom;
-  const worldY = (e.clientY - vpRect.top  - game.panY) / game.zoom;
-
-  const nx = worldX - game.dragOffX;
-  const ny = worldY - game.dragOffY;
-
-  if (game.draggingPiece.groupId !== null) {
-    // Move entire group
-    const dx = nx - game.draggingPiece.x;
-    const dy = ny - game.draggingPiece.y;
-    getGroupPieces(game.draggingPiece.groupId).forEach(p => {
-      p.x += dx; p.y += dy;
-      p.el.style.left = p.x + 'px';
-      p.el.style.top  = p.y + 'px';
-    });
-  } else {
-    game.draggingPiece.x = nx;
-    game.draggingPiece.y = ny;
-    game.draggingPiece.el.style.left = nx + 'px';
-    game.draggingPiece.el.style.top  = ny + 'px';
-  }
-}
-
-function onDocPointerUp(e) {
-  if (!game.draggingPiece) return;
-  document.removeEventListener('pointermove', onDocPointerMove);
-  document.removeEventListener('pointerup', onDocPointerUp);
-
-  const piece = game.draggingPiece;
-  piece.el.classList.remove('dragging');
-  game.draggingPiece = null;
-  game.moves++;
-  updateGameStats();
-
-  // Try snapping
-  trySnap(piece);
-}
-
-function onPieceContextMenu(e) {
-  e.preventDefault();
-  if (!cfg.adv.rotation) return;
-  const el = e.currentTarget;
-  const piece = game.pieces.find(p => p.el === el);
-  if (!piece || piece.snapped) return;
-  piece.rotation = (piece.rotation + 90) % 360;
-  piece.el.style.transform = piece.rotation ? `rotate(${piece.rotation}deg)` : '';
-}
-
-function trySnap(piece) {
-  if (piece.snapped) return;
-  const pw = game.pieceW, ph = game.pieceH;
-  const snapDist = Math.min(pw, ph) * SNAP_THRESHOLD;
-  const N = cfg.cols;
-
-  // ── 1. Try snapping directly to board position ──────────────
-  if (piece.rotation === 0) {
-    const dist = Math.hypot(piece.x - piece.snapX, piece.y - piece.snapY);
-    if (dist < snapDist) {
-      snapPieceToPosition(piece, piece.snapX, piece.snapY);
-      return;
-    }
-  }
-
-  // ── 2. Try snapping to a neighbour piece ─────────────────────
-  if (piece.rotation !== 0) return; // can't snap rotated piece
-  const neighbors = [
-    { dr: -1, dc:  0 }, { dr:  1, dc:  0 },
-    { dr:  0, dc: -1 }, { dr:  0, dc:  1 },
-  ];
-  for (const { dr, dc } of neighbors) {
-    const nr = piece.r + dr, nc = piece.c + dc;
-    if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
-    const nb = game.pieces.find(p => p.r === nr && p.c === nc);
-    if (!nb || !nb.snapped) continue;
-
-    // Where this piece SHOULD be, relative to its neighbour's canvas position
-    // nb.x = nb.snapX + offset (offset is how far nb drifted from its ideal spot)
-    const offset = nb.x - nb.snapX; // same for X
-    const offsetY = nb.y - nb.snapY;
-    const idealX = piece.snapX + offset;
-    const idealY = piece.snapY + offsetY;
-
-    const dist = Math.hypot(piece.x - idealX, piece.y - idealY);
-    if (dist < snapDist) {
-      snapPieceToPosition(piece, idealX, idealY);
-      // Merge into neighbour's group
-      if (nb.groupId !== null) {
-        piece.groupId = nb.groupId;
-        // Pull all group members to their correct offsets too
-        getGroupPieces(nb.groupId).forEach(gp => {
-          if (gp === piece) return;
-          const gx = gp.snapX + offset;
-          const gy = gp.snapY + offsetY;
-          gp.x = gx; gp.y = gy;
-          gp.el.style.left = gx + 'px';
-          gp.el.style.top  = gy + 'px';
-        });
-      } else {
-        const gid = Date.now() + Math.random();
-        nb.groupId = gid;
-        piece.groupId = gid;
-      }
-      return;
-    }
-  }
-}
-
-function snapPieceToPosition(piece, tx, ty) {
-  piece.el.classList.add('snapping');
-  piece.x = tx; piece.y = ty;
-  piece.el.style.left = tx + 'px';
-  piece.el.style.top  = ty + 'px';
-  piece.snapped = true;
-  game.solved++;
-  setTimeout(() => piece.el.classList.remove('snapping'), 220);
-  updateGameStats();
-  if (game.solved === cfg.cols * cfg.cols) setTimeout(handleWin, 400);
-}
-
-function getGroupPieces(groupId) {
-  return game.pieces.filter(p => p.groupId === groupId);
-}
-
-function bringPieceToFront(piece) {
-  let maxZ = 0;
-  game.pieces.forEach(p => { maxZ = Math.max(maxZ, parseInt(p.el.style.zIndex)||0); });
-  const newZ = maxZ + 1;
-  if (piece.groupId !== null) {
-    getGroupPieces(piece.groupId).forEach(p => { p.el.style.zIndex = newZ; });
-  } else {
-    piece.el.style.zIndex = newZ;
-  }
-}
-
-// ---- Viewport pan ----
-function onVPPointerDown(e) {
-  if (e.target.closest('.piece')) return;
-  game.isPanning = true;
-  game.panStartX = e.clientX;
-  game.panStartY = e.clientY;
-  game.panStartPX = game.panX;
-  game.panStartPY = game.panY;
-  document.getElementById('puzzle-viewport').classList.add('panning');
-}
-function onVPPointerMove(e) {
-  if (!game.isPanning) return;
-  e.preventDefault();
-  game.panX = game.panStartPX + (e.clientX - game.panStartX);
-  game.panY = game.panStartPY + (e.clientY - game.panStartY);
-  applyTransform();
-}
-function onVPPointerUp() {
-  game.isPanning = false;
-  const vpEl = document.getElementById('puzzle-viewport');
-  if (vpEl) vpEl.classList.remove('panning');
-}
-
-function onWheel(e) {
-  e.preventDefault();
-  const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-  // Zoom toward mouse position
-  const vpRect = document.getElementById('puzzle-viewport').getBoundingClientRect();
-  const mx = e.clientX - vpRect.left;
-  const my = e.clientY - vpRect.top;
-  const oldZoom = game.zoom;
-  const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta));
-  game.panX = mx - (mx - game.panX) * (newZoom / oldZoom);
-  game.panY = my - (my - game.panY) * (newZoom / oldZoom);
-  game.zoom = newZoom;
-  applyTransform();
-}
-
+// ── pan / zoom helpers ─────────────────────────────────────────
 function setZoom(z) {
   game.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
-  applyTransform();
+  drawJigsaw();
 }
 
-function applyTransform() {
-  document.getElementById('puzzle-world').style.transform =
-    `translate(${game.panX}px,${game.panY}px) scale(${game.zoom})`;
-}
+function applyTransform() { drawJigsaw(); } // compat shim
 
 function fitToScreen() {
-  // Compute bounding box of all pieces + board in world coords
-  const vp = document.getElementById('puzzle-viewport');
+  const vp  = document.getElementById('puzzle-viewport');
+  if (!vp) return;
   const vpW = vp.clientWidth  || window.innerWidth - 24;
   const vpH = vp.clientHeight || Math.min(window.innerHeight * 0.72, 700);
 
+  if (cfg.mode !== 'jigsaw' || !game.pieces.length) return;
+
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   game.pieces.forEach(p => {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x + p.cw);
-    maxY = Math.max(maxY, p.y + p.ch);
+    minX = Math.min(minX, p.px);
+    minY = Math.min(minY, p.py);
+    maxX = Math.max(maxX, p.px + game.pieceW);
+    maxY = Math.max(maxY, p.py + game.pieceH);
   });
-  // Also include the board
   minX = Math.min(minX, game.boardX);
   minY = Math.min(minY, game.boardY);
   maxX = Math.max(maxX, game.boardX + game.boardW);
   maxY = Math.max(maxY, game.boardY + game.boardH);
 
-  const contentW = maxX - minX;
-  const contentH = maxY - minY;
-  const padding = 40;
-  const fitZoom = Math.min(
-    (vpW - padding * 2) / contentW,
-    (vpH - padding * 2) / contentH,
-    MAX_ZOOM
-  );
-  game.zoom = Math.max(MIN_ZOOM, fitZoom);
-  game.panX = (vpW - contentW * game.zoom) / 2 - minX * game.zoom;
-  game.panY = (vpH - contentH * game.zoom) / 2 - minY * game.zoom;
-  applyTransform();
+  const pad  = 40;
+  const fitZ = Math.min((vpW - pad*2) / (maxX - minX), (vpH - pad*2) / (maxY - minY), MAX_ZOOM);
+  game.zoom  = Math.max(MIN_ZOOM, fitZ);
+  game.panX  = (vpW - (maxX - minX) * game.zoom) / 2 - minX * game.zoom;
+  game.panY  = (vpH - (maxY - minY) * game.zoom) / 2 - minY * game.zoom;
+  drawJigsaw();
 }
 
 // Piece size toggle (S / M / L)
@@ -1937,17 +1957,13 @@ const PSZ_SCALES = { S: 0.72, M: 1.0, L: 1.32 };
 document.querySelectorAll('.sz-btn').forEach(btn => {
   btn.onclick = () => {
     const lbl = btn.dataset.psz;
-    if (game._pszLabel === lbl) return; // no change
+    if (game._pszLabel === lbl) return;
     document.querySelectorAll('.sz-btn').forEach(b => b.classList.toggle('active', b.dataset.psz === lbl));
-    game.pieceScale  = PSZ_SCALES[lbl];
-    game._pszLabel   = lbl;
-    // Rebuild the current puzzle at the new size (preserving state for slider, re-scattering for jigsaw)
+    game.pieceScale = PSZ_SCALES[lbl];
+    game._pszLabel  = lbl;
     if (!document.getElementById('game-screen').classList.contains('hidden') && game.img) {
-      if (cfg.mode === 'slider') {
-        buildSliderFromState(); // just re-renders tiles at new size, keeps current tile order
-      } else {
-        buildJigsaw(); // re-build jigsaw at new board size; pieces re-scatter
-      }
+      if (cfg.mode === 'slider') buildSliderFromState();
+      else buildJigsaw();
     }
   };
 });
