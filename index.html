@@ -1440,62 +1440,62 @@ function buildJigsaw() {
 }
 
 // ── TAB EDGE ─────────────────────────────────────────────────
-// Draws one jigsaw edge from screen point (x0,y0) to (x1,y1).
-// dir +1 = tab protrudes outward, -1 = socket indents inward, 0 = straight.
-//
-// Uses the classic "knob" shape: two smooth cubic bezier curves
-// forming a rounded peg. This is the standard algorithm used by
-// all successful HTML5 jigsaw implementations.
-//
-// All geometry is expressed as fractions of the edge length,
-// using the edge's own tangent/normal coordinate frame.
-function drawJigsawEdge(ctx, x0, y0, x1, y1, dir) {
-  if (dir === 0) { ctx.lineTo(x1, y1); return; }
+// edge: { dir, offset, neck, head, height, tilt }
+// dir=0 → straight line. dir=±1 → tab/socket.
+// Draws a smooth single-knob jigsaw edge from (x0,y0) to (x1,y1).
+// Uses 4 cubic bezier segments producing a classic rounded mushroom shape.
+function drawJigsawEdge(ctx, x0, y0, x1, y1, edge) {
+  if (!edge || edge.dir === 0) { ctx.lineTo(x1, y1); return; }
 
   const dx = x1 - x0, dy = y1 - y0;
   const len = Math.sqrt(dx*dx + dy*dy);
+  const tx = dx / len, ty = dy / len;   // unit tangent
+  // Normal pointing outward (right of travel for CCW winding),
+  // flipped by dir so +1 always protrudes outward.
+  const nx = -ty * edge.dir;
+  const ny =  tx * edge.dir;
 
-  // Unit tangent (along edge)
-  const tx = dx / len, ty = dy / len;
-  // Unit normal — perpendicular, pointing LEFT of travel direction.
-  // For a CCW path: top goes right, right goes down, bottom goes left, left goes up.
-  // "Left of travel" is always INTO the tile for a CCW winding.
-  // dir=+1 means we want the normal to point OUTWARD (right of travel) → negate.
-  const nx = -ty * dir;
-  const ny =  tx * dir;
+  // Helper: point at (t along edge) + (n perpendicular) + optional tilt offset
+  const P = (t, n, tiltShift = 0) => ({
+    x: x0 + dx * (t + tiltShift) + nx * len * n,
+    y: y0 + dy * (t + tiltShift) + ny * len * n,
+  });
 
-  // All control points as fractions along the edge + offset along normal.
-  // These fractions match a classic jigsaw knob closely.
-  //
-  //   0    .3  .4  .5  .6  .7    1
-  //   |_____|   |   |   |   |____|
-  //              \_[knob head]_/
-  //
-  const p = (t, n) => ({ x: x0 + dx*t + nx*len*n, y: y0 + dy*t + ny*len*n });
+  // Knob centre position along edge (0.5 + random offset)
+  const mid    = 0.5 + edge.offset;
+  const half   = edge.neck;     // half-width of neck
+  const hhead  = edge.head;     // half-width of head
+  const ht     = edge.height;   // height of protrusion
+  const tilt   = edge.tilt;     // slight axis tilt
 
-  // Neck base left  (0.3, 0)   → shoulder  (0.3, 0.15)  → head (0.4, 0.35)
-  // head peak (0.5, 0.40) (round the top)
-  // head right (0.6, 0.35) → shoulder right (0.7, 0.15) → neck base right (0.7, 0)
+  // Key edge positions
+  const neckL  = mid - half;    // left side of neck
+  const neckR  = mid + half;    // right side of neck
 
-  const A = p(0.30, 0.00);
-  const B = p(0.30, 0.15);  // left shoulder cp
-  const C = p(0.40, 0.35);  // left head
-  const D = p(0.50, 0.40);  // crown
-  const E = p(0.60, 0.35);  // right head
-  const F = p(0.70, 0.15);  // right shoulder cp
-  const G = p(0.70, 0.00);
+  // 8 key geometry points:
+  const NL  = P(neckL,  0);            // neck base left
+  const NLs = P(neckL,  ht * 0.30);   // neck left shoulder
+  const HLb = P(mid - hhead, ht * 0.70, tilt); // head left base
+  const HL  = P(mid - hhead, ht,        tilt); // head left
+  const HR  = P(mid + hhead, ht,        tilt); // head right
+  const HRb = P(mid + hhead, ht * 0.70, tilt); // head right base
+  const NRs = P(neckR,  ht * 0.30);   // neck right shoulder
+  const NR  = P(neckR,  0);            // neck base right
 
-  ctx.lineTo(A.x, A.y);
-  ctx.bezierCurveTo(B.x, B.y, C.x, C.y, D.x, D.y);
-  ctx.bezierCurveTo(E.x, E.y, F.x, F.y, G.x, G.y);
+  ctx.lineTo(NL.x, NL.y);
+  // Left side: neck → shoulder → head
+  ctx.bezierCurveTo(NLs.x, NLs.y, HLb.x, HLb.y, HL.x, HL.y);
+  // Round head: left to right (arc-like bezier)
+  const crown = P(mid, ht * 1.12, tilt); // slight crown overhang
+  ctx.bezierCurveTo(crown.x - tx*len*hhead*0.5, crown.y - ty*len*hhead*0.5,
+                    crown.x + tx*len*hhead*0.5, crown.y + ty*len*hhead*0.5,
+                    HR.x, HR.y);
+  // Right side: head → shoulder → neck
+  ctx.bezierCurveTo(HRb.x, HRb.y, NRs.x, NRs.y, NR.x, NR.y);
   ctx.lineTo(x1, y1);
 }
 
 // ── BUILD PIECE PATH ──────────────────────────────────────────
-// Builds the clip/stroke path for a piece.
-// All coordinates in SCREEN space (already transformed by zoom+pan).
-// sx,sy = screen top-left of piece core tile
-// sw,sh = screen size of piece core tile
 function buildPiecePathOnCtx(ctx, sx, sy, sw, sh, tabDirs) {
   ctx.beginPath();
   ctx.moveTo(sx, sy);
@@ -1905,28 +1905,59 @@ function setupCanvasInteraction() {
 }
 
 function generateTabs(N) {
+  // Each edge stores { dir, offset, neck, head }
+  // dir:    +1 tab, -1 socket, 0 straight
+  // offset: lateral shift of knob centre from edge midpoint (-0.12 to +0.12)
+  // neck:   half-width of knob neck as fraction of edge (0.08..0.14)
+  // head:   half-width of knob head as fraction of edge (0.16..0.24)
+  // height: protrusion height as fraction of edge (0.28..0.42)
+  // Shared edges: right piece gets mirrored dir but SAME shape params.
+
+  function rnd(min, max) { return min + Math.random() * (max - min); }
+  function randEdge(dir) {
+    return {
+      dir,
+      offset: rnd(-0.10, 0.10),   // knob centre shifts left/right along edge
+      neck:   rnd(0.08,  0.13),   // narrow neck
+      head:   rnd(0.17,  0.24),   // wider rounded head
+      height: rnd(0.28,  0.40),   // protrusion depth
+      tilt:   rnd(-0.04, 0.04),   // slight tilt of knob axis
+    };
+  }
+
   const tabs = [];
+  for (let r = 0; r < N; r++) { tabs[r] = []; for (let c = 0; c < N; c++) tabs[r][c] = {}; }
+
+  // Generate right-edges (shared with left of next col)
   for (let r = 0; r < N; r++) {
-    tabs[r] = [];
+    for (let c = 0; c < N - 1; c++) {
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      const shape = randEdge(dir);
+      tabs[r][c].right   = shape;
+      tabs[r][c+1].left  = { ...shape, dir: -dir }; // mirror dir, same shape
+    }
+    // Border edges
+    const bLeft  = cfg.adv.nostraight ? randEdge(Math.random()>.5?1:-1) : { dir:0 };
+    const bRight = cfg.adv.nostraight ? randEdge(Math.random()>.5?1:-1) : { dir:0 };
+    if (!tabs[r][0].left)     tabs[r][0].left     = bLeft;
+    if (!tabs[r][N-1].right)  tabs[r][N-1].right  = bRight;
+  }
+
+  // Generate bottom-edges (shared with top of next row)
+  for (let r = 0; r < N - 1; r++) {
     for (let c = 0; c < N; c++) {
-      tabs[r][c] = {
-        top:    0, left: 0,
-        right:  c < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0),
-        bottom: r < N-1 ? (Math.random() > 0.5 ? 1 : -1) : (cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0),
-      };
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      const shape = randEdge(dir);
+      tabs[r][c].bottom   = shape;
+      tabs[r+1][c].top    = { ...shape, dir: -dir };
     }
   }
-  for (let r = 0; r < N; r++)
-    for (let c = 0; c < N; c++) {
-      if (c < N-1) tabs[r][c+1].left = -tabs[r][c].right;
-      if (r < N-1) tabs[r+1][c].top  = -tabs[r][c].bottom;
-    }
-  // Border edges: straight unless nostraight option on
-  for (let r = 0; r < N; r++)
-    for (let c = 0; c < N; c++) {
-      if (tabs[r][c].left  === 0 && c === 0) tabs[r][c].left  = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
-      if (tabs[r][c].top   === 0 && r === 0) tabs[r][c].top   = cfg.adv.nostraight ? (Math.random()>.5?1:-1) : 0;
-    }
+  // Border top/bottom edges
+  for (let c = 0; c < N; c++) {
+    if (!tabs[0][c].top)     tabs[0][c].top     = cfg.adv.nostraight ? randEdge(Math.random()>.5?1:-1) : { dir:0 };
+    if (!tabs[N-1][c].bottom) tabs[N-1][c].bottom = cfg.adv.nostraight ? randEdge(Math.random()>.5?1:-1) : { dir:0 };
+  }
+
   return tabs;
 }
 
