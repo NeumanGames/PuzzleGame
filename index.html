@@ -1446,69 +1446,83 @@ function buildJigsaw() {
 }
 
 // ── TAB EDGE ─────────────────────────────────────────────────
-// edge: { dir, offset, neck, head, height, tilt }
-// dir=0 → straight line. dir=±1 → tab/socket.
-// Draws a smooth single-knob jigsaw edge from (x0,y0) to (x1,y1).
-// Uses 4 cubic bezier segments producing a classic rounded mushroom shape.
-function drawJigsawEdge(ctx, x0, y0, x1, y1, edge) {
+// Draws a single jigsaw knob on one edge.
+//
+// THE CORE INSIGHT that fixes misfitting pieces:
+// The 4 edges of a piece are drawn in this order:
+//   top:    left  → right   (outward = UP,    i.e. -Y)
+//   right:  top   → bottom  (outward = RIGHT, i.e. +X)
+//   bottom: right → left    (outward = DOWN,  i.e. +Y)
+//   left:   bottom→ top     (outward = LEFT,  i.e. -X)
+//
+// The outward normal for each edge is FIXED to the absolute screen direction
+// (up/right/down/left), NOT derived from the travel direction.
+// This guarantees that piece A's right-edge tab and piece B's left-edge socket
+// are EXACT mirror images — they always fit perfectly.
+//
+// Each call receives the absolute outward normal (onx, ony).
+// dir=+1 → tab protrudes outward, dir=-1 → socket indents inward.
+
+function drawJigsawEdge(ctx, x0, y0, x1, y1, edge, onx, ony) {
   if (!edge || edge.dir === 0) { ctx.lineTo(x1, y1); return; }
 
-  const dx = x1 - x0, dy = y1 - y0;
+  const dx  = x1 - x0, dy = y1 - y0;
   const len = Math.sqrt(dx*dx + dy*dy);
-  const tx = dx / len, ty = dy / len;   // unit tangent
-  // Normal pointing outward (right of travel for CCW winding),
-  // flipped by dir so +1 always protrudes outward.
-  const nx = -ty * edge.dir;
-  const ny =  tx * edge.dir;
+  // Tangent along the edge
+  const tx  = dx / len, ty = dy / len;
+  // Use the ABSOLUTE outward normal, scaled by dir
+  const nx  = onx * edge.dir;
+  const ny  = ony * edge.dir;
 
-  // Helper: point at (t along edge) + (n perpendicular) + optional tilt offset
-  const P = (t, n, tiltShift = 0) => ({
-    x: x0 + dx * (t + tiltShift) + nx * len * n,
-    y: y0 + dy * (t + tiltShift) + ny * len * n,
+  // Point helper: t=fraction along edge, n=fraction of len in normal direction
+  const P = (t, n) => ({
+    x: x0 + dx*t + nx*len*n,
+    y: y0 + dy*t + ny*len*n,
   });
 
-  // Knob centre position along edge (0.5 + random offset)
-  const mid    = 0.5 + edge.offset;
-  const half   = edge.neck;     // half-width of neck
-  const hhead  = edge.head;     // half-width of head
-  const ht     = edge.height;   // height of protrusion
-  const tilt   = edge.tilt;     // slight axis tilt
+  const mid   = 0.5 + edge.offset;
+  const half  = edge.neck;
+  const hhead = edge.head;
+  const ht    = edge.height;
 
-  // Key edge positions
-  const neckL  = mid - half;    // left side of neck
-  const neckR  = mid + half;    // right side of neck
+  const NL  = P(mid - half,  0);
+  const NLs = P(mid - half,  ht * 0.30);
+  const HLb = P(mid - hhead, ht * 0.70);
+  const HL  = P(mid - hhead, ht);
+  const HR  = P(mid + hhead, ht);
+  const HRb = P(mid + hhead, ht * 0.70);
+  const NRs = P(mid + half,  ht * 0.30);
+  const NR  = P(mid + half,  0);
 
-  // 8 key geometry points:
-  const NL  = P(neckL,  0);            // neck base left
-  const NLs = P(neckL,  ht * 0.30);   // neck left shoulder
-  const HLb = P(mid - hhead, ht * 0.70, tilt); // head left base
-  const HL  = P(mid - hhead, ht,        tilt); // head left
-  const HR  = P(mid + hhead, ht,        tilt); // head right
-  const HRb = P(mid + hhead, ht * 0.70, tilt); // head right base
-  const NRs = P(neckR,  ht * 0.30);   // neck right shoulder
-  const NR  = P(neckR,  0);            // neck base right
+  // Crown control points for smooth round head
+  const crownX = x0 + dx*mid + nx*len*ht*1.08;
+  const crownY = y0 + dy*mid + ny*len*ht*1.08;
 
   ctx.lineTo(NL.x, NL.y);
-  // Left side: neck → shoulder → head
   ctx.bezierCurveTo(NLs.x, NLs.y, HLb.x, HLb.y, HL.x, HL.y);
-  // Round head: left to right (arc-like bezier)
-  const crown = P(mid, ht * 1.12, tilt); // slight crown overhang
-  ctx.bezierCurveTo(crown.x - tx*len*hhead*0.5, crown.y - ty*len*hhead*0.5,
-                    crown.x + tx*len*hhead*0.5, crown.y + ty*len*hhead*0.5,
-                    HR.x, HR.y);
-  // Right side: head → shoulder → neck
+  ctx.bezierCurveTo(
+    crownX - tx*len*hhead*0.5, crownY - ty*len*hhead*0.5,
+    crownX + tx*len*hhead*0.5, crownY + ty*len*hhead*0.5,
+    HR.x, HR.y
+  );
   ctx.bezierCurveTo(HRb.x, HRb.y, NRs.x, NRs.y, NR.x, NR.y);
   ctx.lineTo(x1, y1);
 }
 
 // ── BUILD PIECE PATH ──────────────────────────────────────────
+// Each edge gets a FIXED absolute outward normal:
+//   top    → outward is UP    (0, -1)
+//   right  → outward is RIGHT (+1, 0)
+//   bottom → outward is DOWN  (0, +1)
+//   left   → outward is LEFT  (-1, 0)
+// This ensures tabs and sockets on adjacent pieces are perfect mirrors.
 function buildPiecePathOnCtx(ctx, sx, sy, sw, sh, tabDirs) {
   ctx.beginPath();
   ctx.moveTo(sx, sy);
-  drawJigsawEdge(ctx, sx,    sy,    sx+sw, sy,    tabDirs.top);
-  drawJigsawEdge(ctx, sx+sw, sy,    sx+sw, sy+sh, tabDirs.right);
-  drawJigsawEdge(ctx, sx+sw, sy+sh, sx,    sy+sh, tabDirs.bottom);
-  drawJigsawEdge(ctx, sx,    sy+sh, sx,    sy,    tabDirs.left);
+  drawJigsawEdge(ctx, sx,    sy,    sx+sw, sy,    tabDirs.top,     0, -1);
+  drawJigsawEdge(ctx, sx+sw, sy,    sx+sw, sy+sh, tabDirs.right,  +1,  0);
+  drawJigsawEdge(ctx, sx+sw, sy+sh, sx,    sy+sh, tabDirs.bottom,  0, +1);
+  drawJigsawEdge(ctx, sx,    sy+sh, sx,    sy,    tabDirs.left,   -1,  0);
   ctx.closePath();
 }
 
