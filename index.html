@@ -205,8 +205,11 @@ header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
 
 #game-toolbar {
   display:flex; align-items:center; justify-content:space-between;
-  width:100%; max-width:1100px; gap:8px; flex-shrink:0; flex-wrap:wrap;
+  width:100%; max-width:1100px; gap:8px; flex-shrink:0; flex-wrap:nowrap;
+  overflow-x:auto; -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
 }
+#game-toolbar::-webkit-scrollbar { display:none; }
 .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1; }
 .toolbar-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
 
@@ -244,7 +247,7 @@ header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
   border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,.18);
   background:rgba(255,255,255,.6);
   user-select:none; -webkit-user-select:none;
-  touch-action:none;
+  touch-action:pan-y;
   width:100%; max-width:1100px;
 }
 #puzzle-viewport.panning { cursor:grabbing; }
@@ -457,10 +460,61 @@ footer {
 #unsplash-credit { font-size:.7rem; color:#aaa; text-align:center; margin-top:4px; }
 #unsplash-credit a { color:var(--blue); text-decoration:none; }
 
+/* Compact header during gameplay on small screens */
+body.game-active header .subtitle { display:none; }
+body.game-active header { margin-bottom:4px; }
+body.game-active .logo { font-size:clamp(1.2rem,4vw,2rem); }
+@media(min-width:601px) {
+  body.game-active header .subtitle { display:block; }
+  body.game-active .logo { font-size:clamp(1.8rem,5.5vw,3.2rem); }
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────────── */
 @media(max-width:600px) {
-  .start-btn { font-size:1.2rem; padding:14px 32px; }
-  .footer-btn { font-size:.85rem; padding:10px 16px; }
-  .img-category-grid { grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); }
+  /* Header */
+  .logo { font-size:clamp(1.4rem,8vw,2.2rem); }
+  .subtitle { font-size:.6rem; letter-spacing:1px; }
+  header { margin-bottom:4px; }
+
+  /* Setup */
+  #setup-screen { gap:14px; }
+  .setup-section { max-width:100%; }
+  .setup-label { font-size:1rem; }
+  .pill { font-size:.82rem; padding:8px 12px; }
+  .pill small { font-size:.58rem !important; }
+  .img-category-grid { grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:8px; }
+  .img-grid { grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:6px; }
+  .img-picker-tabs { flex-wrap:wrap; }
+  .img-tab { font-size:.8rem; padding:6px 10px; }
+  .start-btn { font-size:1.15rem; padding:14px 28px; width:100%; max-width:320px; }
+
+  /* Toolbar — larger touch targets */
+  #game-toolbar { gap:5px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; }
+  #game-toolbar::-webkit-scrollbar { display:none; }
+  .toolbar-left { gap:5px; flex-shrink:0; }
+  .toolbar-right { gap:4px; flex-shrink:0; }
+  .stat-chip { padding:7px 10px; font-size:.9rem; white-space:nowrap; }
+  .stat-chip .stat-label { font-size:.55rem; }
+
+  /* Larger icon buttons on mobile — min 48px touch target */
+  .icon-btn { width:48px; height:48px; font-size:1.3rem; }
+
+  /* Size toggle — bigger */
+  #size-toggle { border-radius:40px; }
+  .sz-btn { font-size:.85rem; padding:9px 13px; }
+
+  /* Puzzle viewport — fill available height */
+  #puzzle-viewport { border-radius:10px; }
+
+  /* Footer */
+  .footer-btn { font-size:.82rem; padding:10px 14px; }
+  footer { padding:16px 16px 20px; gap:10px; }
+}
+
+@media(max-width:380px) {
+  .icon-btn { width:44px; height:44px; font-size:1.1rem; }
+  .sz-btn { font-size:.75rem; padding:8px 10px; }
+  .stat-chip { padding:6px 8px; font-size:.85rem; }
 }
 </style>
 </head>
@@ -482,7 +536,7 @@ footer {
       <ul>
         <li><span class="mi">🧩</span><span><strong>Jigsaw Mode</strong> — drag and snap interlocking pieces together on the board.</span></li>
         <li><span class="mi">🔢</span><span><strong>Slider Mode</strong> — slide tiles into the empty space to restore the picture.</span></li>
-        <li><span class="mi">📐</span><span><strong>Puzzle Size</strong> — from 3×3 (9 pieces, great for little ones!) up to 11×11 (121 pieces).</span></li>
+        <li><span class="mi">📐</span><span><strong>Puzzle Size</strong> — from 2×2 (4 pieces, perfect for toddlers!) up to 11×11 (121 pieces).</span></li>
         <li><span class="mi">🖼️</span><span><strong>Image</strong> — pick a built-in image, search Unsplash, or upload your own photo.</span></li>
         <li><span class="mi">📦</span><span><strong>Tray Position</strong> — choose where loose pieces wait: all sides, top, bottom, left, or right.</span></li>
         <li><span class="mi">🔄</span><span><strong>Rotation (Advanced)</strong> — pieces start rotated; you must rotate them to snap.</span></li>
@@ -543,6 +597,7 @@ footer {
     <div class="setup-section">
       <div class="setup-label">📐 Puzzle Size <span class="badge">Pick One</span></div>
       <div class="pill-group" id="sz-pills">
+        <button class="pill" data-sz="2">👶 Baby<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">2×2 · 4 pieces</small></button>
         <button class="pill selected" data-sz="3">🐣 Tiny<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">3×3 · 9 pieces</small></button>
         <button class="pill" data-sz="4">🌱 Easy<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">4×4 · 16 pieces</small></button>
         <button class="pill" data-sz="5">🦊 Medium<br><small style="font-family:var(--font-body);font-size:.65rem;font-weight:700">5×5 · 25 pieces</small></button>
@@ -1144,7 +1199,7 @@ function updateHelpBody() {
       <li><span class="mi">🔗</span><span><strong>Snap!</strong> — drop a piece near its neighbor and it will lock in place.</span></li>
       <li><span class="mi">🤝</span><span><strong>Groups move together</strong> — once snapped, drag the whole group at once.</span></li>
       ${cfg.adv.rotation ? '<li><span class="mi">🔄</span><span><strong>Right-click / two-finger tap</strong> to rotate a piece 90°.</span></li>' : ''}
-      <li><span class="mi">📐</span><span><strong>Piece size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize pieces anytime.</span></li>
+      <li><span class="mi">📐</span><span><strong>Piece size</strong> — tap <strong>S · M · L</strong> in the toolbar to resize pieces anytime without moving them.</span></li>
       <li><span class="mi">🔍</span><span><strong>Zoom</strong> with ➕/➖, pinch (mobile), or Ctrl+scroll (desktop).</span></li>
       <li><span class="mi">🗺</span><span><strong>Fit to screen</strong> — tap 🗺 to zoom out and see all pieces at once.</span></li>
       <li><span class="mi">✊</span><span><strong>Pan</strong> by dragging the background.</span></li>
@@ -1180,7 +1235,7 @@ function buildSlider() {
 
   const N = cfg.cols;
   const total = N * N;
-  const basePx = Math.min(window.innerWidth - 32, window.innerHeight * 0.72, 700);
+  const basePx = Math.min(window.innerWidth - 32, window.innerHeight * 0.60, window.innerWidth < 600 ? window.innerWidth - 24 : 700);
   const maxBoardPx = Math.round(basePx * game.pieceScale);
   const tileSize = Math.floor(maxBoardPx / N);
   const boardPx  = tileSize * N;
@@ -1359,8 +1414,14 @@ function buildJigsaw() {
 
   const N   = cfg.cols;
   const vpW = vp.clientWidth  || window.innerWidth - 24;
-  const vpH = Math.min(window.innerHeight * 0.72, 700);
-  vp.style.height = vpH + 'px';
+  // On mobile, use more of the screen height; on desktop cap at 700px
+  const toolbarH = document.getElementById('game-toolbar').offsetHeight || 60;
+  const headerH  = document.querySelector('header') ? document.querySelector('header').offsetHeight : 60;
+  const vpH = Math.min(
+    window.innerHeight - toolbarH - headerH - 48,  // available height
+    window.innerWidth < 600 ? window.innerHeight * 0.62 : 700
+  );
+  vp.style.height = Math.max(260, vpH) + 'px';
 
   // Remove old canvas / DOM pieces
   document.querySelectorAll('.piece').forEach(p => p.remove());
@@ -1577,29 +1638,30 @@ function drawJigsaw() {
   }
   ctx.restore();
 
-  // ── Pieces ──
+  // ── Pieces — draw in two passes ──────────────────────────────
+  // Pass 1: image fill (all pieces, back to front)
+  // Pass 2: outlines only for unsnapped/dragging pieces (never over locked ones)
+  // This prevents outlines from drawing over adjacent piece images.
   const sorted = [...game.pieces].sort((a, b) => a.zOrder - b.zOrder);
 
+  // Pass 1: image fill
   sorted.forEach(p => {
-    // Screen coords of this piece's core tile
     const sx = p.px * zoom + panX;
     const sy = p.py * zoom + panY;
     const sw = pw * zoom;
     const sh = ph * zoom;
 
-    // ─ Fill with image (clip first) ─────────────────────────
     ctx.save();
     buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
     ctx.clip();
 
+    // Shadow: fill a semi-transparent dark rect to create shadow effect inside clip
+    if (!p.locked) {
+      ctx.fillStyle = 'rgba(0,0,0,0.08)';
+      ctx.fillRect(sx - sw, sy - sh, sw*3, sh*3);
+    }
+
     if (game.img) {
-      // The piece's slice of the board image is (p.c * pw, p.r * ph) within
-      // the full board, sized (pw x ph). We need to draw the full board image
-      // offset so that tile (p.r, p.c) aligns with the piece's current screen pos.
-      // 
-      // If piece were at its snap position, the board image drawn at (bsx, bsy)
-      // would be correct. But the piece is at (sx, sy) instead of its snap screen pos.
-      // So we shift the board image by (sx - snapSX, sy - snapSY).
       const snapSX = p.snapPx * zoom + panX;
       const snapSY = p.snapPy * zoom + panY;
       const imgX   = bsx + (sx - snapSX);
@@ -1607,42 +1669,40 @@ function drawJigsaw() {
       ctx.drawImage(game.img, imgX, imgY, bsw, bsh);
     }
 
-    ctx.restore();
+    // Subtle inner shadow on non-locked pieces so they look lifted
+    if (!p.locked) {
+      const grad = ctx.createLinearGradient(sx, sy, sx, sy + sh*0.3);
+      grad.addColorStop(0, 'rgba(255,255,255,0.18)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx - sw, sy - sh, sw*3, sh*3);
+    }
 
-    // ─ Drop shadow under piece ───────────────────────────────
+    ctx.restore();
+  });
+
+  // Pass 2: outlines — only on non-locked pieces, drawn clipped so they
+  // never overlap neighbouring pieces' images
+  sorted.forEach(p => {
+    const sx = p.px * zoom + panX;
+    const sy = p.py * zoom + panY;
+    const sw = pw * zoom;
+    const sh = ph * zoom;
+
+    if (p.locked && p !== game.draggingPiece) return; // no outline on locked pieces
+
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.18)';
-    ctx.shadowBlur  = 6;
-    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
     buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
-    ctx.strokeStyle = 'rgba(0,0,0,0)'; // invisible stroke just to trigger shadow
-    ctx.lineWidth = 1;
+    // Double lineWidth because we clip half away, leaving only the outer half
+    if (p === game.draggingPiece) {
+      ctx.strokeStyle = 'rgba(77,150,255,1.0)';
+      ctx.lineWidth   = 4;
+    } else {
+      ctx.strokeStyle = 'rgba(20,20,20,0.55)';
+      ctx.lineWidth   = 2;
+    }
     ctx.stroke();
     ctx.restore();
-
-    // ─ Lock overlay for snapped pieces ─────────────────────
-    if (p.locked) {
-      ctx.save();
-      buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
-      ctx.clip();
-      ctx.fillStyle = 'rgba(107,203,119,0.12)';
-      ctx.fillRect(sx - sw, sy - sh, sw * 3, sh * 3);
-      ctx.restore();
-    }
-
-    // ─ Outline ──────────────────────────────────────────────
-    buildPiecePathOnCtx(ctx, sx, sy, sw, sh, p.tabDirs);
-    if (p === game.draggingPiece) {
-      ctx.strokeStyle = 'rgba(77,150,255,0.9)';
-      ctx.lineWidth   = 2.5;
-    } else if (p.locked) {
-      ctx.strokeStyle = 'rgba(107,203,119,0.55)';
-      ctx.lineWidth   = 1.2;
-    } else {
-      ctx.strokeStyle = 'rgba(30,30,30,0.5)';
-      ctx.lineWidth   = 1.5;
-    }
-    ctx.stroke();
   });
 }
 
@@ -1767,17 +1827,19 @@ function trySnap(piece) {
 
   if (trySnaToBoard()) return;
 
-  // Try neighbours that are already locked on the board
+  // Try neighbours that are already locked on the board.
+  // If piece is close to where it SHOULD be relative to a locked neighbour,
+  // snap it to board (since locked neighbours are always at exact snapPx/snapPy).
   const dirs = [{dr:-1,dc:0},{dr:1,dc:0},{dr:0,dc:-1},{dr:0,dc:1}];
   for (const {dr, dc} of dirs) {
     const nr = piece.r + dr, nc = piece.c + dc;
     if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
     const nb = game.pieces.find(p => p.r === nr && p.c === nc && p.locked);
     if (!nb) continue;
-    // The correct position for piece relative to this locked neighbour
-    // is simply its own snapPx/snapPy (since nb is already at its snapPx/snapPy).
+    // nb is at nb.snapPx exactly. Piece should be at piece.snapPx exactly.
+    // Check if piece is close enough to its own correct board position.
     const dist = Math.hypot(piece.px - piece.snapPx, piece.py - piece.snapPy);
-    if (dist < snapDist) {
+    if (dist < snapDist * 1.5) {  // wider radius when locked neighbour nearby
       snapToBoard(piece);
       return;
     }
@@ -2312,6 +2374,7 @@ function showScreen(id) {
   ['setup-screen','game-screen','win-screen'].forEach(s =>
     document.getElementById(s).classList.toggle('hidden', s !== id)
   );
+  document.body.classList.toggle('game-active', id === 'game-screen');
 }
 
 function shuffleArray(arr) {
