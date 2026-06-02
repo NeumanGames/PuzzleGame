@@ -38,7 +38,7 @@ body {
 
 #page-content {
   flex:1; display:flex; flex-direction:column; align-items:center;
-  padding:12px 10px 16px; width:100%;
+  padding:12px 10px 0; width:100%; min-height:0;
 }
 
 /* ── HEADER ──────────────────────────────────────────────── */
@@ -201,7 +201,8 @@ header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
 .setup-help-btn:hover { color:var(--blue); background:rgba(77,150,255,.08); }
 
 /* ── GAME SCREEN ─────────────────────────────────────────── */
-#game-screen { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; }
+#game-screen { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; flex:1; }
+@media(max-width:600px) { #game-screen { gap:5px; } }
 
 #game-toolbar {
   display:flex; align-items:center; justify-content:space-between;
@@ -241,7 +242,7 @@ header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
 .icon-btn.preview-btn { background:var(--purple); color:#fff; box-shadow:0 4px 0 #7a1fb0; }
 .icon-btn.preview-btn:hover { box-shadow:0 6px 0 #7a1fb0; }
 
-/* Puzzle viewport */
+/* Puzzle viewport — CSS-driven height so it fills screen on all devices */
 #puzzle-viewport {
   position:relative; overflow:hidden; cursor:grab;
   border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,.18);
@@ -249,6 +250,22 @@ header { text-align:center; margin-bottom:6px; width:100%; flex-shrink:0; }
   user-select:none; -webkit-user-select:none;
   touch-action:pan-y;
   width:100%; max-width:1100px;
+  /* Fill available vertical space. On desktop cap at 700px.
+     --toolbar-h is set by JS once toolbar is measured.         */
+  height: min(calc(100dvh - var(--header-h, 120px) - var(--toolbar-h, 60px) - 80px), 700px);
+  min-height: 260px;
+}
+@supports not (height: 1dvh) {
+  #puzzle-viewport {
+    height: min(calc(100vh - var(--header-h, 120px) - var(--toolbar-h, 60px) - 80px), 700px);
+  }
+}
+@media(max-width:600px) {
+  #puzzle-viewport {
+    height: calc(100dvh - var(--header-h, 90px) - var(--toolbar-h, 54px) - 64px);
+    min-height: 260px;
+    border-radius: 10px;
+  }
 }
 #puzzle-viewport.panning { cursor:grabbing; }
 
@@ -465,8 +482,8 @@ body.game-active header .subtitle { display:none; }
 body.game-active header { margin-bottom:4px; }
 body.game-active .logo { font-size:clamp(1.2rem,4vw,2rem); }
 @media(min-width:601px) {
-  body.game-active header .subtitle { display:block; }
-  body.game-active .logo { font-size:clamp(1.8rem,5.5vw,3.2rem); }
+  body.game-active header .subtitle { display:block; opacity:.7; }
+  body.game-active .logo { font-size:clamp(1.4rem,4vw,2.4rem); }
 }
 
 /* ── RESPONSIVE ───────────────────────────────────────────── */
@@ -770,6 +787,7 @@ body.game-active .logo { font-size:clamp(1.2rem,4vw,2rem); }
     &copy; 2025 NeumanGames™ · Free to play, always. ·
     <a href="https://github.com/NeumanGames/puzzle-game" target="_blank" rel="noopener noreferrer">GitHub</a>
     · Images via <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer">Unsplash</a>
+    · <span style="opacity:.6">v1.0.0025</span>
   </div>
 </footer>
 
@@ -1414,14 +1432,9 @@ function buildJigsaw() {
 
   const N   = cfg.cols;
   const vpW = vp.clientWidth  || window.innerWidth - 24;
-  // On mobile, use more of the screen height; on desktop cap at 700px
-  const toolbarH = document.getElementById('game-toolbar').offsetHeight || 60;
-  const headerH  = document.querySelector('header') ? document.querySelector('header').offsetHeight : 60;
-  const vpH = Math.min(
-    window.innerHeight - toolbarH - headerH - 48,  // available height
-    window.innerWidth < 600 ? window.innerHeight * 0.62 : 700
-  );
-  vp.style.height = Math.max(260, vpH) + 'px';
+  // Let CSS drive the height (see #puzzle-viewport CSS rules).
+  // Just read what CSS computed — don't override it.
+  const vpH = vp.clientHeight || Math.max(260, window.innerHeight - 160);
 
   // Remove old canvas / DOM pieces
   document.querySelectorAll('.piece').forEach(p => p.remove());
@@ -2118,6 +2131,11 @@ function setupCanvasInteraction() {
       const vp = document.getElementById('puzzle-viewport');
       jigsawCanvas.width  = vp.clientWidth;
       jigsawCanvas.height = vp.clientHeight;
+      // Re-measure CSS vars too
+      const header  = document.querySelector('header');
+      const toolbar = document.getElementById('game-toolbar');
+      if (header)  document.documentElement.style.setProperty('--header-h',  header.offsetHeight  + 'px');
+      if (toolbar) document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
       drawJigsaw();
     }
   });
@@ -2375,6 +2393,13 @@ function showScreen(id) {
     document.getElementById(s).classList.toggle('hidden', s !== id)
   );
   document.body.classList.toggle('game-active', id === 'game-screen');
+  // Measure header + toolbar AFTER class toggle so game-active CSS applies first
+  requestAnimationFrame(() => {
+    const header  = document.querySelector('header');
+    const toolbar = document.getElementById('game-toolbar');
+    if (header)  document.documentElement.style.setProperty('--header-h',  header.offsetHeight  + 'px');
+    if (toolbar) document.documentElement.style.setProperty('--toolbar-h', toolbar.offsetHeight + 'px');
+  });
 }
 
 function shuffleArray(arr) {
@@ -2396,8 +2421,7 @@ window.addEventListener('resize', () => {
       else {
         // Adjust viewport height but don't re-scatter pieces
         const vp = document.getElementById('puzzle-viewport');
-        const vpH = Math.min(window.innerHeight * 0.72, 700);
-        vp.style.height = vpH + 'px';
+        // Height is CSS-driven — no JS override needed
       }
     }
   }, 200);
